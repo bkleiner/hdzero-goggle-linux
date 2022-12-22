@@ -192,11 +192,10 @@
  */
 	.irp	c,,eq,ne,cs,cc,mi,pl,vs,vc,hi,ls,ge,lt,gt,le,hs,lo
 	.macro	badr\c, rd, sym
+    adr\c   \rd, \sym
 #ifdef CONFIG_THUMB2_KERNEL
-	adr\c	\rd, \sym + 1
-#else
-	adr\c	\rd, \sym
-#endif
+    orr\c   \rd, \rd, 1
+ #endif
 	.endm
 	.endr
 
