@@ -33,6 +33,7 @@
 *.lzo
 *.patch
 *.gcno
+*.ll
 modules.builtin
 Module.symvers
 *.dwo
@@ -75,6 +76,7 @@ Module.symvers
 include/config
 include/generated
 arch/*/include/generated
+user_headers
 
 # stgit generated dirs
 patches-*
@@ -114,3 +116,11 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+# Do not track output folder.
+/output
+
+#
+drivers/gator/gator_src_md5.h
+arch/arm/boot/dts/board.dts
+arch/arm64/boot/dts/sunxi/board.dts

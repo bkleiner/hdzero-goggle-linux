@@ -144,6 +144,7 @@ static inline int __fat_get_block(struct inode *inode, sector_t iblock,
 	 */
 	if (!offset && !(iblock < last_block)) {
 		/* TODO: multiple cluster allocation would be desirable. */
+
 		err = fat_add_cluster(inode);
 		if (err)
 			return err;
@@ -497,6 +498,60 @@ static int fat_validate_dir(struct inode *dir)
 	}
 	return 0;
 }
+#ifdef FAT_DEBUG_GET_PATH
+#include <linux/slab.h>
+void getfullpath(struct inode *inode)
+{
+	struct hlist_node *plist = NULL;
+	struct dentry *tmp = NULL;
+	struct dentry *dent = NULL;
+	struct dentry *parent = NULL;
+	char *name = NULL;
+	struct inode *pinode = inode;
+	char *pbuf = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *buf = pbuf;
+
+	if (pbuf == NULL) {
+		pr_err("%s, kmalloc error\n", __func__);
+		return;
+	}
+	memset(pbuf, '\0', PATH_MAX);
+
+
+	hlist_for_each(plist, &pinode->i_dentry) {
+		tmp = list_entry(plist, struct dentry, d_u.d_alias);
+		if (tmp && tmp->d_inode == pinode) {
+			dent = tmp;
+			break;
+		}
+	}
+
+	if (dent == NULL) {
+		printk("%s,line:%d,The inode is dir.\n", __func__, __LINE__);
+		kfree(pbuf);
+		return;
+	}
+	name = (char *)(dent->d_name.name);
+	pbuf += (PATH_MAX - 1);
+	while (pinode && (pinode->i_ino != 2) && (pinode->i_ino != 1)) {
+		if (dent == NULL)
+			break;
+		name = (char *)(dent->d_name.name);
+		if (!name)
+			break;
+		pbuf = pbuf - strlen(name) - 1;
+		*pbuf = '/';
+		memcpy(pbuf+1, name, strlen(name));
+		parent = dent->d_parent;
+		if (parent != NULL) {
+			dent = parent;
+			pinode = dent->d_inode;
+		}
+	}
+	printk(" %s fullname is %s\n", __func__, pbuf);
+	kfree(buf);
+}
+#endif
 
 /* doesn't deal with root inode */
 int fat_fill_inode(struct inode *inode, struct msdos_dir_entry *de)
@@ -509,6 +564,9 @@ int fat_fill_inode(struct inode *inode, struct msdos_dir_entry *de)
 	inode->i_gid = sbi->options.fs_gid;
 	inode->i_version++;
 	inode->i_generation = get_seconds();
+#ifdef CONFIG_PRELLOCATE_FLAG
+	MSDOS_I(inode)->i_prealloc = 0;
+#endif
 
 	if ((de->attr & ATTR_DIR) && !IS_FREE(de->name)) {
 		inode->i_generation &= ~1;
@@ -531,8 +589,8 @@ int fat_fill_inode(struct inode *inode, struct msdos_dir_entry *de)
 	} else { /* not a directory */
 		inode->i_generation |= 1;
 		inode->i_mode = fat_make_mode(sbi, de->attr,
-			((sbi->options.showexec && !is_exec(de->name + 8))
-			 ? S_IRUGO|S_IWUGO : S_IRWXUGO));
+				((sbi->options.showexec && !is_exec(de->name + 8))
+				 ? S_IRUGO|S_IWUGO : S_IRWXUGO));
 		MSDOS_I(inode)->i_start = fat_get_start(sbi, de);
 
 		MSDOS_I(inode)->i_logstart = MSDOS_I(inode)->i_start;
@@ -541,6 +599,14 @@ int fat_fill_inode(struct inode *inode, struct msdos_dir_entry *de)
 		inode->i_fop = &fat_file_operations;
 		inode->i_mapping->a_ops = &fat_aops;
 		MSDOS_I(inode)->mmu_private = inode->i_size;
+
+#ifdef CONFIG_PRELLOCATE_FLAG
+		if (de->lcase & CASE_LOWER_PREA) {
+			MSDOS_I(inode)->i_prealloc = 1;
+		} else {
+			MSDOS_I(inode)->i_prealloc = 0;
+		}
+#endif
 	}
 	if (de->attr & ATTR_SYS) {
 		if (sbi->options.sys_immutable)
@@ -548,8 +614,33 @@ int fat_fill_inode(struct inode *inode, struct msdos_dir_entry *de)
 	}
 	fat_save_attrs(inode, de->attr);
 
+#ifdef CONFIG_PRELLOCATE_FLAG
+	int nr_cluster = 0;
+	if (check_prealloc(inode)) {
+		nr_cluster = fat_caculate_cluster(inode);
+		if (nr_cluster < 0) {
+			pr_err("FAT ERR: %s FAT caculate clusters failed.\n",
+					__func__);
+		//	fat_fs_error(inode->i_sb, "clusters badly casulated (clusters: %d)",
+		//		nr_cluster);
+		}
+		if ((de->attr & ATTR_DIR) && !IS_FREE(de->name)) {
+			pr_err("FAT WARN: %s DIR contain falloc flag (%d).\n",
+					__func__, nr_cluster);
+			inode->i_blocks = ((inode->i_size + (sbi->cluster_size - 1))
+					& ~((loff_t)sbi->cluster_size - 1)) >> 9;
+		} else
+			inode->i_blocks = nr_cluster << (sbi->cluster_bits - 9);
+
+	} else {
+		inode->i_blocks = ((inode->i_size + (sbi->cluster_size - 1))
+				& ~((loff_t)sbi->cluster_size - 1)) >> 9;
+
+	}
+#else
 	inode->i_blocks = ((inode->i_size + (sbi->cluster_size - 1))
-			   & ~((loff_t)sbi->cluster_size - 1)) >> 9;
+			& ~((loff_t)sbi->cluster_size - 1)) >> 9;
+#endif
 
 	fat_time_fat2unix(sbi, &inode->i_mtime, de->time, de->date, 0);
 	if (sbi->options.isvfat) {
@@ -863,6 +954,13 @@ retry:
 	}
 
 	raw_entry = &((struct msdos_dir_entry *) (bh->b_data))[offset];
+#ifdef CONFIG_PRELLOCATE_FLAG
+	if (check_prealloc(inode)) {
+		raw_entry->lcase |= CASE_LOWER_PREA;
+	}
+
+#endif
+
 	if (S_ISDIR(inode->i_mode))
 		raw_entry->size = 0;
 	else
@@ -1009,6 +1107,9 @@ static int fat_show_options(struct seq_file *m, struct dentry *root)
 		seq_puts(m, ",nfs=stale_rw");
 	if (opts->discard)
 		seq_puts(m, ",discard");
+#ifdef FAT_DEBUG
+//	seq_printf(m, ",version(%s/%s)", __TIME__, __DATE__);
+#endif
 	if (opts->dos1xfloppy)
 		seq_puts(m, ",dos1xfloppy");
 
@@ -1643,7 +1744,6 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 		error = fat_read_static_bpb(sb,
 			(struct fat_boot_sector *)bh->b_data, silent, &bpb);
 	brelse(bh);
-
 	if (error == -EINVAL)
 		goto out_invalid;
 	else if (error)
@@ -1701,6 +1801,80 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 		sbi->fat_length = bpb.fat32_length;
 		sbi->root_cluster = bpb.fat32_root_cluster;
 
+#ifdef CONFIG_FAT_READ_FAT_DIR_SUNXI
+		/*
+		 *read one fat to memory
+		 */
+		{
+#if 0
+			int i;
+			struct buffer_head *fat_bh;
+			fat_msg(sb, KERN_INFO, "fat start %d,fat len %ld ver1.4\n", sbi->fat_start, sbi->fat_length);
+			for (i = sbi->fat_start; i < (sbi->fat_start+sbi->fat_length); i++) {
+				fat_bh = sb_bread(sb, i);
+				if (!fat_bh) {
+					fat_msg(sb, KERN_ERR, "cant't read fat bh\n");
+					continue;
+				}
+				set_buffer_uptodate(fat_bh);
+			}
+			fat_msg(sb, KERN_INFO, "Read one fat and no release it\n");
+#else
+#define MAX_READ_AHEAD_BHS   128
+			int i, k;
+			struct buffer_head *fat_bh[MAX_READ_AHEAD_BHS];
+			int j = 0;
+			int c = 0;
+			fat_msg(sb, KERN_INFO, "fat start %d,fat len %ld ver1.84\n", sbi->fat_start, sbi->fat_length);
+			for (c = 0; c < (sbi->fat_length/MAX_READ_AHEAD_BHS); c++) {
+					for (i = c*MAX_READ_AHEAD_BHS, j = 0; i < (c*MAX_READ_AHEAD_BHS  + MAX_READ_AHEAD_BHS); i++, j++) {
+						fat_bh[j] = __getblk_gfp(sb->s_bdev, sbi->fat_start + i, sb->s_blocksize, __GFP_MOVABLE);
+						if (likely(fat_bh[j]) && !buffer_uptodate(fat_bh[j])) {
+							lock_buffer(fat_bh[j]);
+							if (buffer_uptodate(fat_bh[j])) {
+								unlock_buffer(fat_bh[j]);
+								continue;
+							} else {
+								get_bh(fat_bh[j]);
+								fat_bh[j]->b_end_io = end_buffer_read_sync;
+								submit_bh(REQ_OP_READ, 0, fat_bh[j]);
+							}
+						} else if (!fat_bh[j]) {
+							fat_msg(sb, KERN_ERR, "bh is NULL\n");
+							error = -EIO;
+							goto out_fail;
+						}
+					}
+
+					BUG_ON(j != MAX_READ_AHEAD_BHS);
+					for (k = 0; k < j; k++) {
+						BUG_ON(k >= MAX_READ_AHEAD_BHS);
+						wait_on_buffer(fat_bh[k]);
+						if (!buffer_uptodate(fat_bh[k])) {
+							fat_msg(sb, KERN_ERR, "fat bh %d not unpdate\n", fat_bh[k]->b_blocknr);
+							error = -EIO;
+							goto out_fail;
+						}
+					}
+					BUG_ON(k != MAX_READ_AHEAD_BHS);
+			}
+
+			for (i = c*MAX_READ_AHEAD_BHS, j = 0; i < sbi->fat_length; i++, j++) {
+				BUG_ON(j >= MAX_READ_AHEAD_BHS);
+				fat_bh[j] = sb_bread(sb, sbi->fat_start + i);
+				if (!fat_bh[j]) {
+					fat_msg(sb, KERN_ERR, "cant't read fat bh,%d\n", i);
+					error = -EIO;
+					goto out_fail;
+				}
+			}
+
+			fat_msg(sb, KERN_INFO, "Read one fat and no release it\n");
+#endif
+
+		}
+#endif
+
 		/* MC - if info_sector is 0, don't multiply by 0 */
 		sbi->fsinfo_sector = bpb.fat32_info_sector;
 		if (sbi->fsinfo_sector == 0)
@@ -1712,6 +1886,14 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 			       " (sector = %lu)", sbi->fsinfo_sector);
 			goto out_fail;
 		}
+
+#ifdef CONFIG_FAT_READ_FAT_DIR_SUNXI
+		{
+			printk("not release fsinfo_bh\n");
+			get_bh(fsinfo_bh);
+			set_buffer_uptodate(fsinfo_bh);
+		}
+#endif
 
 		fsinfo = (struct fat_boot_fsinfo *)fsinfo_bh->b_data;
 		if (!IS_FSINFO(fsinfo)) {
@@ -1747,6 +1929,26 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 			       " (%u)", sbi->dir_entries);
 		goto out_invalid;
 	}
+
+#ifdef CONFIG_FAT_READ_FAT_DIR_SUNXI
+	{
+		int i = 0;
+		struct buffer_head *dir_bh;
+
+		printk("fat dir start %ld,read fat len %d\n", sbi->dir_start, 0x1ff);
+		for (i = sbi->dir_start; i <= (sbi->dir_start + 0x1ff); i++) {
+			dir_bh = sb_bread(sb, i);
+			if (!dir_bh) {
+				fat_msg(sb, KERN_ERR, "cann't read fat dir bh %d\n",  i);
+				error = -EIO;
+				goto out_fail;
+			}
+			set_buffer_uptodate(dir_bh);
+		}
+		printk("Read fat dir and no releae,blocksize %ld\n", sb->s_blocksize);
+	}
+#endif
+
 
 	rootdir_sectors = sbi->dir_entries
 		* sizeof(struct msdos_dir_entry) / sb->s_blocksize;
@@ -1867,6 +2069,52 @@ out_invalid:
 		fat_msg(sb, KERN_INFO, "Can't find a valid FAT filesystem");
 
 out_fail:
+
+#ifdef CONFIG_FAT_READ_FAT_DIR_SUNXI
+	do {
+		int i;
+		struct buffer_head *fat_bh;
+		struct buffer_head *dir_bh;
+		struct buffer_head *fsinfo_bh;
+
+		if (!sbi)
+			break;
+
+		printk("error free fat start %ld,fat len %ld\n", sbi->fat_start, sbi->fat_length);
+		for (i = sbi->fat_start; i < (sbi->fat_start+sbi->fat_length); i++) {
+			fat_bh = __find_get_block(sb->s_bdev, i, sb->s_blocksize);
+			if (!fat_bh) {
+				//printk("%s,%d can't find fat bh %d\n", __FUNCTION__, __LINE__, i);
+				//fat_msg(sb, KERN_WARNING, "error free:%s,%d can't find fat bh %d\n", __FUNCTION__, __LINE__ , i);
+				continue;
+			}
+
+			brelse(fat_bh);
+			brelse(fat_bh);
+		}
+		printk("error free:Relase fat\n");
+
+		if (sbi->dir_start) {
+			for (i = sbi->dir_start; i <= (sbi->dir_start + 0x1ff); i++) {
+				dir_bh = __find_get_block(sb->s_bdev, i, sb->s_blocksize);
+				if (!dir_bh) {
+					//fat_msg(sb, KERN_WARNING, "error free:%s,%d can't find fat dir bh %d\n", __FUNCTION__, __LINE__, i);
+					continue;
+				}
+				brelse(dir_bh);
+				brelse(dir_bh);
+			}
+			printk("error free:Release fat dir\n");
+		}
+
+		fsinfo_bh = __find_get_block(sb->s_bdev, 1, sb->s_blocksize);
+		if (fsinfo_bh) {
+			brelse(fsinfo_bh);
+			brelse(fsinfo_bh);
+		}
+	} while (0);
+#endif
+
 	if (fsinfo_inode)
 		iput(fsinfo_inode);
 	if (fat_inode)
