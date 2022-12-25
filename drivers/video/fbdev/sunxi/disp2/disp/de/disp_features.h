@@ -11,7 +11,7 @@
 #ifndef _DISP_FEATURES_H_
 #define _DISP_FEATURES_H_
 
-/* #include "include.h" */
+#include "include.h"
 
 #if defined(CONFIG_ARCH_SUN8IW6)
 #include "lowlevel_v2x/de_feat.h"

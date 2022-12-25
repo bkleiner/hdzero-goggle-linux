@@ -11,6 +11,8 @@
 #ifndef _DE_FEAT_H_
 #define _DE_FEAT_H_
 
+#include <linux/kconfig.h>
+
 #define DE_OUTPUT_TYPE_LCD   1
 #define DE_OUTPUT_TYPE_TV    2
 #define DE_OUTPUT_TYPE_HDMI  4
@@ -229,7 +231,7 @@
 #define SUPPORT_LVDS
 #define DE_WB_RESET_SHARE
 /* #define LVDS_REVERT */
-#ifdef COFNIG_VDPO_DISP2_SUNXI
+#if IS_ENABLED(CONFIG_VDPO_DISP2_SUNXI_MODULE)
 #define SUPPORT_VDPO
 #define DEVICE_VDPO_NUM 1
 #endif
@@ -266,7 +268,7 @@
 #define DE_WB_RESET_SHARE
 /* #define LVDS_REVERT */
 
-#ifdef COFNIG_VDPO_DISP2_SUNXI
+#if IS_ENABLED(CONFIG_VDPO_DISP2_SUNXI_MODULE)
 #define SUPPORT_VDPO
 #define DEVICE_VDPO_NUM 1
 #endif
@@ -299,7 +301,7 @@
 #define DE_WB_RESET_SHARE
 /* #define LVDS_REVERT */
 
-#ifdef COFNIG_VDPO_DISP2_SUNXI
+#if IS_ENABLED(CONFIG_VDPO_DISP2_SUNXI_MODULE)
 #define SUPPORT_VDPO
 #define DEVICE_VDPO_NUM 1
 #endif
