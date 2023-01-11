@@ -573,6 +573,15 @@ struct clk *sunxi_clk_register_factors(struct device *dev, void __iomem *base,
 	struct sunxi_clk_factors *factors;
 	struct clk *clk;
 	struct clk_init_data init;
+#ifdef CONFIG_PM_SLEEP
+	struct sunxi_factor_clk_reg_cache *factor_clk_reg;
+
+	factor_clk_reg = kzalloc(sizeof(struct sunxi_factor_clk_reg_cache), GFP_KERNEL);
+	if (!factor_clk_reg) {
+		pr_err("%s: could not allocate factors clk reg\n", __func__);
+		return ERR_PTR(-ENOMEM);
+	}
+#endif
 
 	/* allocate the factors */
 	factors = kzalloc(sizeof(struct sunxi_clk_factors), GFP_KERNEL);
@@ -605,6 +614,25 @@ struct clk *sunxi_clk_register_factors(struct device *dev, void __iomem *base,
 	factors->get_factors = init_data->get_factors;
 	factors->calc_rate = init_data->calc_rate;
 	factors->flags = init_data->flags;
+#ifdef CONFIG_PM_SLEEP
+	if (!strcmp(init.name, "pll_cpu") ||
+		!strcmp(init.name, "pll_ddr0") ||
+#ifdef CONFIG_ARCH_SUN50IW10
+		!strcmp(init.name, "pll_com") ||
+#endif
+#ifdef CONFIG_ARCH_SUN50IW11
+		!strcmp(init.name, "pll_periph0") ||
+		!strcmp(init.name, "pll_audio0") ||
+		!strcmp(init.name, "pll_audio1") ||
+#endif
+		!strcmp(init.name, "pll_ddr1")) {
+		kfree(factor_clk_reg);
+	} else {
+		factor_clk_reg->config_reg = factors->reg;
+		factor_clk_reg->sdmpat_reg = (void *)factors->config->sdmpat;
+		list_add_tail(&factor_clk_reg->node, &clk_factor_reg_cache_list);
+	}
+#endif
 	/* register the clock */
 	clk = clk_register(dev, &factors->hw);
 	factors->hw.init = NULL;

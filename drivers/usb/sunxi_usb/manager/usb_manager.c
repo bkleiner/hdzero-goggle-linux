@@ -377,7 +377,7 @@ static int sunxi_otg_manager_probe(struct platform_device *pdev)
 
 		set_usb_role_ex(USB_ROLE_HOST);
 
-		thread_host_run_flag = 1;
+		thread_host_run_flag = 0;
 		host_th = kthread_create(usb_host_scan_thread,
 						NULL,
 						"usb_host_chose");

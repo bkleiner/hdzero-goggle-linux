@@ -583,24 +583,6 @@
 				allwinner,pull = <0>;
 			};
 
-			//added by liran for gpio-keys 
-			gpio_keys_pins_a: gpio_keys@0 {
-				allwinner,pins = "PH0";
-				allwinner,function = "gpio_in";
-				allwinner,muxsel = <0>;
-				allwinner,drive = <0>;
-				allwinner,pull = <1>;
-			};
-
-			//added by liran for rotary-encoder
-			rotary_pins_a: rotary@0 {
-				allwinner,pins = "PH1", "PH5";
-				allwinner,function = "gpio_in";
-				allwinner,muxsel = <0>;
-				allwinner,drive = <0>;
-				allwinner,pull = <1>;
-			};
-
 			daudio2_pins_a: daudio2@0 {
 				allwinner,pins = "PG9", "PG10", "PG11",
 						"PG12", "PG13";
@@ -899,21 +881,3 @@
 		};
 	};
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -10,3 +10,7 @@ config CCI_TO_TWI
 	bool "chenge cci to twi"
 
 endchoice
+
+config CCI_ALWAYS_ON
+	bool "cci always on after inmod VIN module"
+	        default y

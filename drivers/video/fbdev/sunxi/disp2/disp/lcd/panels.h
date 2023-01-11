@@ -140,7 +140,5 @@ extern struct __lcd_panel wtl096601g03_panel;
 #ifdef CONFIG_LCD_SUPPORT_RT13QV005D
 extern struct __lcd_panel rt13qv005d_panel;
 #endif
-#ifdef CONFIG_LCD_SUPPORT_LX50HDI4002
-extern struct __lcd_panel lx50hdi4002_panel;
-#endif
+extern struct __lcd_panel t050k589_panel;
 #endif

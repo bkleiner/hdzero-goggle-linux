@@ -50,6 +50,6 @@ disp-$(CONFIG_LCD_SUPPORT_INET_DSI_PANEL) += lcd/inet_dsi_panel.o
 disp-$(CONFIG_LCD_SUPPORT_RT13QV005D) += lcd/rt13qv005d.o
 disp-$(CONFIG_LCD_SUPPORT_ILI9881C) += lcd/ili9881c.o
 disp-$(CONFIG_LCD_SUPPORT_TM_DSI_PANEL) += lcd/tm_dsi_panel.o
-disp-$(CONFIG_LCD_SUPPORT_LX50HDI4002) += lcd/lx50hdi4002.o
+disp-objs += lcd/t050k589.o
 
 disp-objs += $(obj_low)

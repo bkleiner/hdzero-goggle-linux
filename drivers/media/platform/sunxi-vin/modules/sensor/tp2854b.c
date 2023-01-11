@@ -1,10 +1,10 @@
-
 /*
- * A V4L2 driver for TP9950 YUV cameras.
+ * A V4L2 driver for imx317 Raw cameras.
  *
- * Copyright (c) 2019 by Allwinnertech Co., Ltd.  http://www.allwinnertech.com
+ * Copyright (c) 2017 by Allwinnertech Co., Ltd.  http://www.allwinnertech.com
  *
- * Authors:  Zheng Zequn <zequnzheng@allwinnertech.com>
+ * Authors:  Zhao Wei <zhaowei@allwinnertech.com>
+ *    Liang WeiJie <liangweijie@allwinnertech.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,18 +25,17 @@
 #include "camera.h"
 #include "sensor_helper.h"
 
-MODULE_AUTHOR("zw");
-MODULE_DESCRIPTION("A low-level driver for TP9950 sensors");
+MODULE_AUTHOR("lwj");
+MODULE_DESCRIPTION("A low-level driver for TP2854 sensors");
 MODULE_LICENSE("GPL");
 
-#define MCLK              (27*1000*1000)
-#define CLK_POL           V4L2_MBUS_PCLK_SAMPLE_FALLING
-#define V4L2_IDENT_SENSOR 0x5028
+#define MCLK              (24*1000*1000)
+#define V4L2_IDENT_SENSOR 0x2854
 
-#define DBG_INFO(format, args...) (printk("[TP9950 INFO] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
-#define DBG_ERR(format, args...) (printk("[TP9950 ERR] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
+#define DBG_INFO(format, args...) (printk("[TP2854B INFO] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
+#define DBG_ERR(format, args...) (printk("[TP2854B ERR] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
 
-/* enable tp9950 sensor detect */
+/* enable tp9930 sensor detect */
 #define SENSOR_DETECT_KTHREAD 1
 /* USE DETECT BY GPIO_IRQ OR POLLING
  * DET_USE_POLLING 0 meant by gpio_irq
@@ -48,14 +47,16 @@ MODULE_LICENSE("GPL");
 
 #if SENSOR_DETECT_KTHREAD
 
+#define DUMP_TEST
+
 struct sensor_indetect {
 	struct class *sensor_class;
 	struct task_struct *sensor_task;
 	struct device *dev;
 	struct cdev *cdev;
-	struct gpio_config detect_power;
+	struct gpio_config detect_power[DETECT_GPIO_MAX];
 	struct gpio_config detect_gpio[DETECT_GPIO_MAX];
-	struct delayed_work tp9950_work;
+	struct delayed_work tp9930_work;
 
 	data_type   last_status[DETECT_GPIO_MAX];
 #if !DET_USE_POLLING
@@ -66,426 +67,533 @@ struct sensor_indetect {
 } sensor_indetect;
 static DEFINE_MUTEX(det_mutex);
 #endif
-
 /*
  * Our nominal (default) frame rate.
  */
+
 #define SENSOR_FRAME_RATE 30
 
 /*
- * The TP9920 sits on i2c with ID 0x88 or 0x8a
- * SAD-low:0x88 SAD-high:0x8a
+ * The IMX317 i2c address
  */
-#define I2C_ADDR 0x88
-#define SENSOR_NAME "tp9950"
+#define I2C_ADDR 0x34
 
-static struct regval_list reg_1080p30_1ch[] = {
-	{0x02, 0xCC},
-	{0x05, 0x00},
-	{0x06, 0x32},
-	{0x07, 0xC0},
-	{0x08, 0x00},
-	{0x09, 0x24},
-	{0x0A, 0x48},
-	{0x0B, 0xC0},
-	{0x0C, 0x03},
-	{0x0D, 0x72},
-	{0x0E, 0x00},
-	{0x0F, 0x00},
-	{0x10, 0x00},
-	{0x11, 0x40},
-	{0x12, 0x60},
-	{0x13, 0x00},
-	{0x14, 0x00},
-	{0x15, 0x01},
-	{0x16, 0xF0},
-	{0x17, 0x80},
-	{0x18, 0x29},
-	{0x19, 0x38},
-	{0x1A, 0x47},
-	{0x1B, 0x01},
-	{0x1C, 0x08},
-	{0x1D, 0x98},
-	{0x1E, 0x80},
-	{0x1F, 0x80},
-	{0x20, 0x38},
-	{0x21, 0x46},
-	{0x22, 0x36},
-	{0x23, 0x3C},
-	{0x24, 0x04},
-	{0x25, 0xFE},
-	{0x26, 0x0D},
-	{0x27, 0x2D},
-	{0x28, 0x00},
-	{0x29, 0x48},
-	{0x2A, 0x30},
-	{0x2B, 0x60},
-	{0x2C, 0x3A},
-	{0x2D, 0x54},
-	{0x2E, 0x40},
-	{0x2F, 0x00},
-	{0x30, 0xA5},
-	{0x31, 0x95},
-	{0x32, 0xE0},
-	{0x33, 0x60},
-	{0x34, 0x00},
-	{0x35, 0x05},
-	{0x36, 0xDC},
-	{0x37, 0x00},
-	{0x38, 0x00},
-	{0x39, 0x1C},
-	{0x3A, 0x32},
-	{0x3B, 0x26},
-	{0x3C, 0x00},
-	{0x3D, 0x60},
-	{0x3E, 0x00},
-	{0x3F, 0x00},
-	{0x40, 0x00},
-	{0x41, 0x00},
-	{0x42, 0x00},
-	{0x43, 0x00},
-	{0x44, 0x00},
-	{0x45, 0x00},
-	{0x46, 0x00},
-	{0x47, 0x00},
-	{0x48, 0x00},
-	{0x49, 0x00},
-	{0x4A, 0x00},
-	{0x4B, 0x00},
-	{0x4C, 0x43},
-	{0x4D, 0x00},
-	{0x4E, 0x17},
-	{0x4F, 0x00},
-	{0x50, 0x00},
-	{0x51, 0x00},
-	{0x52, 0x00},
-	{0x53, 0x00},
-	{0x54, 0x00},
+#define SENSOR_NAME "tp2854b"
 
-	{0xB3, 0xFA},
-	{0xB4, 0x00},
-	{0xB5, 0x00},
-	{0xB6, 0x00},
-	{0xB7, 0x00},
-	{0xB8, 0x00},
-	{0xB9, 0x00},
-	{0xBA, 0x00},
-	{0xBB, 0x00},
-	{0xBC, 0x00},
-	{0xBD, 0x00},
-	{0xBE, 0x00},
-	{0xBF, 0x00},
-	{0xC0, 0x00},
-	{0xC1, 0x00},
-	{0xC2, 0x0B},
-	{0xC3, 0x0C},
-	{0xC4, 0x00},
-	{0xC5, 0x00},
-	{0xC6, 0x1F},
-	{0xC7, 0x78},
-	{0xC8, 0x27},
-	{0xC9, 0x00},
-	{0xCA, 0x00},
-	{0xCB, 0x07},
-	{0xCC, 0x08},
-	{0xCD, 0x00},
-	{0xCE, 0x00},
-	{0xCF, 0x04},
-	{0xD0, 0x00},
-	{0xD1, 0x00},
-	{0xD2, 0x60},
-	{0xD3, 0x10},
-	{0xD4, 0x06},
-	{0xD5, 0xBE},
-	{0xD6, 0x39},
-	{0xD7, 0x27},
-	{0xD8, 0x00},
-	{0xD9, 0x00},
-	{0xDA, 0x00},
-	{0xDB, 0x00},
-	{0xDC, 0x00},
-	{0xDD, 0x00},
-	{0xDE, 0x00},
-	{0xDF, 0x00},
-	{0xE0, 0x00},
-	{0xE1, 0x00},
-	{0xE2, 0x00},
-	{0xE3, 0x00},
-	{0xE4, 0x00},
-	{0xE5, 0x00},
-	{0xE6, 0x00},
-	{0xE7, 0x13},
-	{0xE8, 0x03},
-	{0xE9, 0x00},
-	{0xEA, 0x00},
-	{0xEB, 0x00},
-	{0xEC, 0x00},
-	{0xED, 0x00},
-	{0xEE, 0x00},
-	{0xEF, 0x00},
-	{0xF0, 0x00},
-	{0xF1, 0x00},
-	{0xF2, 0x00},
-	{0xF3, 0x00},
-	{0xF4, 0x20},
-	{0xF5, 0x10},
-	{0xF6, 0x00},
-	{0xF7, 0x00},
-	{0xF8, 0x00},
-	{0xF9, 0x00},
-	{0xFA, 0x88},
-	{0xFB, 0x00},
-	{0xFC, 0x00},
 
-	{0x40, 0x08},
-	{0x00, 0x00},
-	{0x01, 0xf8},
-	{0x02, 0x01},
-	{0x08, 0xF0},
-	{0x13, 0x04},
-	{0x14, 0x73},
-	{0x15, 0x08},
-	{0x20, 0x12},
-	{0x34, 0x1b},
-	{0x23, 0x02},
-	{0x23, 0x00},
+#define DBG_INFO(format, args...) (printk("[TP2584 INFO] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
+#define DBG_ERR(format, args...) (printk("[TP2584 ERR] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
 
-	{0x40, 0x00},
+/*
+ * The default register settings
+ */
+
+static struct regval_list sensor_default_regs[] = {
+
 };
 
-static struct regval_list reg_1080p25_1ch[] = {
-	{0x02, 0xCC},
-	{0x05, 0x00},
-	{0x06, 0x32},
-	{0x07, 0xC0},
-	{0x08, 0x00},
-	{0x09, 0x24},
-	{0x0A, 0x48},
-	{0x0B, 0xC0},
-	{0x0C, 0x03},
-	{0x0D, 0x73},
-	{0x0E, 0x00},
-	{0x0F, 0x00},
-	{0x10, 0x00},
-	{0x11, 0x40},
-	{0x12, 0x60},
-	{0x13, 0x00},
-	{0x14, 0x00},
-	{0x15, 0x01},
-	{0x16, 0xF0},
-	{0x17, 0x80},
-	{0x18, 0x29},
-	{0x19, 0x38},
-	{0x1A, 0x47},
-	{0x1B, 0x01},
-	{0x1C, 0x0A},
-	{0x1D, 0x50},
-	{0x1E, 0x80},
-	{0x1F, 0x80},
-	{0x20, 0x3C},
-	{0x21, 0x46},
-	{0x22, 0x36},
-	{0x23, 0x3C},
-	{0x24, 0x04},
-	{0x25, 0xFE},
-	{0x26, 0x0D},
-	{0x27, 0x2D},
-	{0x28, 0x00},
-	{0x29, 0x48},
-	{0x2A, 0x30},
-	{0x2B, 0x60},
-	{0x2C, 0x1A},
-	{0x2D, 0x54},
-	{0x2E, 0x40},
-	{0x2F, 0x00},
-	{0x30, 0xA5},
-	{0x31, 0x86},
-	{0x32, 0xFB},
-	{0x33, 0x60},
-	{0x34, 0x00},
-	{0x35, 0x05},
-	{0x36, 0xDC},
-	{0x37, 0x00},
-	{0x38, 0x00},
-	{0x39, 0x1C},
-	{0x3A, 0x32},
-	{0x3B, 0x26},
-	{0x3C, 0x00},
-	{0x3D, 0x60},
-	{0x3E, 0x00},
-	{0x3F, 0x00},
-	{0x40, 0x00},
-	{0x41, 0x00},
-	{0x42, 0x00},
-	{0x43, 0x00},
-	{0x44, 0x00},
-	{0x45, 0x00},
-	{0x46, 0x00},
-	{0x47, 0x00},
-	{0x48, 0x00},
-	{0x49, 0x00},
-	{0x4A, 0x00},
-	{0x4B, 0x00},
-	{0x4C, 0x43},
-	{0x4D, 0x00},
-	{0x4E, 0x17},
-	{0x4F, 0x00},
-	{0x50, 0x00},
-	{0x51, 0x00},
-	{0x52, 0x00},
-	{0x53, 0x00},
-	{0x54, 0x00},
+static struct regval_list reg_dump[] = {
+{0x00,0x00},
+{0x01,0x00},
+{0x02,0x00},
+{0x03,0x00},
+{0x04,0x00},
+{0x05,0x00},
+{0x06,0x00},
+{0x07,0x00},
+{0x08,0x00},
+{0x09,0x00},
+{0x0a,0x00},
+{0x0b,0x00},
+{0x0c,0x00},
+{0x0d,0x00},
+{0x0e,0x00},
+{0x0f,0x00},
 
-	{0xB3, 0xFA},
-	{0xB4, 0x00},
-	{0xB5, 0x00},
-	{0xB6, 0x00},
-	{0xB7, 0x00},
-	{0xB8, 0x00},
-	{0xB9, 0x00},
-	{0xBA, 0x00},
-	{0xBB, 0x00},
-	{0xBC, 0x00},
-	{0xBD, 0x00},
-	{0xBE, 0x00},
-	{0xBF, 0x00},
-	{0xC0, 0x00},
-	{0xC1, 0x00},
-	{0xC2, 0x0B},
-	{0xC3, 0x0C},
-	{0xC4, 0x00},
-	{0xC5, 0x00},
-	{0xC6, 0x1F},
-	{0xC7, 0x78},
-	{0xC8, 0x27},
-	{0xC9, 0x00},
-	{0xCA, 0x00},
-	{0xCB, 0x07},
-	{0xCC, 0x08},
-	{0xCD, 0x00},
-	{0xCE, 0x00},
-	{0xCF, 0x04},
-	{0xD0, 0x00},
-	{0xD1, 0x00},
-	{0xD2, 0x60},
-	{0xD3, 0x10},
-	{0xD4, 0x06},
-	{0xD5, 0xBE},
-	{0xD6, 0x39},
-	{0xD7, 0x27},
-	{0xD8, 0x00},
-	{0xD9, 0x00},
-	{0xDA, 0x00},
-	{0xDB, 0x00},
-	{0xDC, 0x00},
-	{0xDD, 0x00},
-	{0xDE, 0x00},
-	{0xDF, 0x00},
-	{0xE0, 0x00},
-	{0xE1, 0x00},
-	{0xE2, 0x00},
-	{0xE3, 0x00},
-	{0xE4, 0x00},
-	{0xE5, 0x00},
-	{0xE6, 0x00},
-	{0xE7, 0x13},
-	{0xE8, 0x03},
-	{0xE9, 0x00},
-	{0xEA, 0x00},
-	{0xEB, 0x00},
-	{0xEC, 0x00},
-	{0xED, 0x00},
-	{0xEE, 0x00},
-	{0xEF, 0x00},
-	{0xF0, 0x00},
-	{0xF1, 0x00},
-	{0xF2, 0x00},
-	{0xF3, 0x00},
-	{0xF4, 0x20},
-	{0xF5, 0x10},
-	{0xF6, 0x00},
-	{0xF7, 0x00},
-	{0xF8, 0x00},
-	{0xF9, 0x00},
-	{0xFA, 0x88},
-	{0xFB, 0x00},
-	{0xFC, 0x00},
+{0x10,0x00},
+{0x11,0x00},
+{0x12,0x00},
+{0x13,0x00},
+{0x14,0x00},
+{0x15,0x00},
+{0x16,0x00},
+{0x17,0x00},
+{0x18,0x00},
+{0x19,0x00},
+{0x1a,0x00},
+{0x1b,0x00},
+{0x1c,0x00},
+{0x1d,0x00},
+{0x1e,0x00},
+{0x1f,0x00},
 
-	{0x40, 0x08},
-	{0x00, 0x00},
-	{0x01, 0xf8},
-	{0x02, 0x01},
-	{0x08, 0xF0},
-	{0x13, 0x04},
-	{0x14, 0x73},
-	{0x15, 0x08},
-	{0x20, 0x12},
-	{0x34, 0x1b},
-	{0x23, 0x02},
-	{0x23, 0x00},
+{0x20,0x00},
+{0x21,0x00},
+{0x22,0x00},
+{0x23,0x00},
+{0x24,0x00},
+{0x25,0x00},
+{0x26,0x00},
+{0x27,0x00},
+{0x28,0x00},
+{0x29,0x00},
+{0x2a,0x00},
+{0x2b,0x00},
+{0x2c,0x00},
+{0x2d,0x00},
+{0x2e,0x00},
+{0x2f,0x00},
 
-	{0x40, 0x00},
+{0x30,0x00},
+{0x31,0x00},
+{0x32,0x00},
+{0x33,0x00},
+{0x34,0x00},
+{0x35,0x00},
+{0x36,0x00},
+{0x37,0x00},
+{0x38,0x00},
+{0x39,0x00},
+{0x3a,0x00},
+{0x3b,0x00},
+{0x3c,0x00},
+{0x3d,0x00},
+{0x3e,0x00},
+{0x3f,0x00},
+
+{0x40,0x00},
+{0x41,0x00},
+{0x42,0x00},
+{0x43,0x00},
+{0x44,0x00},
+{0x45,0x00},
+{0x46,0x00},
+{0x47,0x00},
+{0x48,0x00},
+{0x49,0x00},
+{0x4a,0x00},
+{0x4b,0x00},
+{0x4c,0x00},
+{0x4d,0x00},
+{0x4e,0x00},
+{0x4f,0x00},
+
+{0x50,0x00},
+{0x51,0x00},
+{0x52,0x00},
+{0x53,0x00},
+{0x54,0x00},
+{0x55,0x00},
+{0x56,0x00},
+{0x57,0x00},
+{0x58,0x00},
+{0x59,0x00},
+{0x5a,0x00},
+{0x5b,0x00},
+{0x5c,0x00},
+{0x5d,0x00},
+{0x5e,0x00},
+{0x5f,0x00},
+
+{0x61,0x00},
+{0x62,0x00},
+{0x63,0x00},
+{0x64,0x00},
+{0x65,0x00},
+{0x66,0x00},
+{0x67,0x00},
+{0x68,0x00},
+{0x69,0x00},
+{0x6a,0x00},
+{0x6b,0x00},
+{0x6c,0x00},
+{0x6d,0x00},
+{0x6e,0x00},
+{0x6f,0x00},
+
+{0x70,0x00},
+{0x71,0x00},
+{0x72,0x00},
+{0x73,0x00},
+{0x74,0x00},
+{0x75,0x00},
+{0x76,0x00},
+{0x77,0x00},
+{0x78,0x00},
+{0x79,0x00},
+{0x7a,0x00},
+{0x7b,0x00},
+{0x7c,0x00},
+{0x7d,0x00},
+{0x7e,0x00},
+{0x7f,0x00},
+
+{0x80,0x00},
+{0x81,0x00},
+{0x82,0x00},
+{0x83,0x00},
+{0x84,0x00},
+{0x85,0x00},
+{0x86,0x00},
+{0x87,0x00},
+{0x88,0x00},
+{0x89,0x00},
+{0x8a,0x00},
+{0x8b,0x00},
+{0x8c,0x00},
+{0x8d,0x00},
+{0x8e,0x00},
+{0x8f,0x00},
+
+{0x90,0x00},
+{0x91,0x00},
+{0x92,0x00},
+{0x93,0x00},
+{0x94,0x00},
+{0x95,0x00},
+{0x96,0x00},
+{0x97,0x00},
+{0x98,0x00},
+{0x99,0x00},
+{0x9a,0x00},
+{0x9b,0x00},
+{0x9c,0x00},
+{0x9d,0x00},
+{0x9e,0x00},
+{0x9f,0x00},
+
+{0xa0,0x00},
+{0xa1,0x00},
+{0xa2,0x00},
+{0xa3,0x00},
+{0xa4,0x00},
+{0xa5,0x00},
+{0xa6,0x00},
+{0xa7,0x00},
+{0xa8,0x00},
+{0xa9,0x00},
+{0xaa,0x00},
+{0xab,0x00},
+{0xac,0x00},
+{0xad,0x00},
+{0xae,0x00},
+{0xaf,0x00},
+
+{0xb0,0x00},
+{0xb1,0x00},
+{0xb2,0x00},
+{0xb3,0x00},
+{0xb4,0x00},
+{0xb5,0x00},
+{0xb6,0x00},
+{0xb7,0x00},
+{0xb8,0x00},
+{0xb9,0x00},
+{0xba,0x00},
+{0xbb,0x00},
+{0xbc,0x00},
+{0xbd,0x00},
+{0xbe,0x00},
+{0xbf,0x00},
+
+{0xc0,0x00},
+{0xc1,0x00},
+{0xc2,0x00},
+{0xc3,0x00},
+{0xc4,0x00},
+{0xc5,0x00},
+{0xc6,0x00},
+{0xc7,0x00},
+{0xc8,0x00},
+{0xc9,0x00},
+{0xca,0x00},
+{0xcb,0x00},
+{0xcc,0x00},
+{0xcd,0x00},
+{0xce,0x00},
+{0xcf,0x00},
+
+{0xd0,0x00},
+{0xd1,0x00},
+{0xd2,0x00},
+{0xd3,0x00},
+{0xd4,0x00},
+{0xd5,0x00},
+{0xd6,0x00},
+{0xd7,0x00},
+{0xd8,0x00},
+{0xd9,0x00},
+{0xda,0x00},
+{0xdb,0x00},
+{0xdc,0x00},
+{0xdd,0x00},
+{0xde,0x00},
+{0xdf,0x00},
+
+{0xf0,0x00},
+{0xf1,0x00},
+{0xf2,0x00},
+{0xf3,0x00},
+{0xf4,0x00},
+{0xf5,0x00},
+{0xf6,0x00},
+{0xf7,0x00},
+{0xf8,0x00},
+{0xf9,0x00},
+{0xfa,0x00},
+{0xfb,0x00},
+{0xfc,0x00},
+{0xfd,0x00},
+{0xfe,0x00},
+{0xff,0x00},
+
 };
 
-static int sensor_s_sw_stby(struct v4l2_subdev *sd, int on_off)
+static struct regval_list reg_1080p25_4ch[] = {
+	
+	{0x40, 0x04}, //video page, write all
+	{0x4e, 0x00},
+	{0xf5, 0xf0},
+		
+	{0x02, 0x04},//
+	{0x07, 0xc0}, 
+	{0x0b, 0xc0},  		
+	{0x0c, 0x03}, 
+	{0x0d, 0x73},  
+
+	{0x15, 0x01},
+	{0x16, 0xf0}, 
+	{0x17, 0x80}, //	Active=1800
+	{0x18, 0x29},
+	{0x19, 0x38},
+	{0x1a, 0x47},				
+	{0x1c, 0x0a},  //1920*1080, 25fps
+	{0x1d, 0x50},  //
+	
+	{0x20, 0x3c},  
+	{0x21, 0x46}, 
+	{0x22, 0x36},
+	{0x23, 0x3c},
+	{0x25, 0xfe},
+	{0x26, 0x0d},
+
+	//{0x2a,0x3c},
+	{0x2a,0x30},
+
+	{0x2b, 0x60},  
+	{0x2c, 0x1a}, 
+	{0x2d, 0x54},
+	{0x2e, 0x40},
+
+	{0x30, 0xa5},  
+	{0x31, 0x86}, 
+	{0x32, 0xfb},
+	{0x33, 0x60},
+			
+	{0x35, 0x05},
+	{0x38, 0x00}, 
+	{0x39, 0x1C}, 	
+
+	//mipi setting
+	{0x40, 0x08}, //MIPI page 
+	{0x01, 0xf8},
+	{0x02, 0x01},
+	{0x08, 0x0f},
+			
+	{0x10, 0x20},
+	{0x11, 0x47},
+	{0x12, 0x54},		
+	{0x13, 0xef},
+
+	{0x20, 0x44},
+	{0x34, 0xe4},
+
+	{0x14, 0x47},
+	{0x15, 0x01},
+
+	{0x33, 0x0f},
+	{0x33, 0x00},
+
+	{0x14, 0x4F},
+	{0x14, 0x47},
+	{0x14, 0x06},
+
+	{0x15, 0x00},
+
+	{0x25, 0x07}, //0x08
+	{0x26, 0x05}, //0x06
+	{0x27, 0x0A}, //0x0c
+
+	/* Disable MIPI CSI2 output */
+	{0x23, 0x02},
+
+	/* Enable MIPI CSI2 output */
+	{0x23, 0x00},
+		
+};
+
+/*
+ * Here we'll try to encapsulate the changes for just the output
+ * video format.
+ *
+ */
+
+static struct regval_list sensor_fmt_raw[] = {
+
+};
+
+/*
+ * Code for dealing with controls.
+ * fill with different sensor module
+ * different sensor module has different settings here
+ * if not support the follow function ,retrun -EINVAL
+ */
+
+static int sensor_g_exp(struct v4l2_subdev *sd, __s32 *value)
 {
-	if (on_off)
-		vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
-	else
-		vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
+	struct sensor_info *info = to_state(sd);
+	*value = info->exp;
+	DBG_INFO("sensor_get_exposure = %d\n", info->exp);
 	return 0;
 }
 
+
+
+static int sensor_s_exp(struct v4l2_subdev *sd, unsigned int exp_val)
+{
+	data_type explow, exphigh;
+	int shutter, exp_val_m;
+	struct sensor_info *info = to_state(sd);
+
+	info->exp = exp_val;
+	return 0;
+}
+
+static int sensor_g_gain(struct v4l2_subdev *sd, __s32 *value)
+{
+	struct sensor_info *info = to_state(sd);
+	*value = info->gain;
+	DBG_INFO("sensor_get_gain = %d\n", info->gain);
+	return 0;
+}
+
+static int sensor_s_gain(struct v4l2_subdev *sd, int gain_val)
+{
+	struct sensor_info *info = to_state(sd);
+
+	DBG_INFO("sensor_set_gain = %d, Done!\n", gain_val);
+	info->gain = gain_val;
+
+	return 0;
+}
+
+static int sensor_s_exp_gain(struct v4l2_subdev *sd,
+			     struct sensor_exp_gain *exp_gain)
+{
+	struct sensor_info *info = to_state(sd);
+	int exp_val, gain_val;
+
+	exp_val = exp_gain->exp_val;
+	gain_val = exp_gain->gain_val;
+
+	DBG_INFO("sensor_set_gain exp = %d, %d Done!\n", gain_val, exp_val);
+
+	info->exp = exp_val;
+	info->gain = gain_val;
+	return 0;
+}
+
+static int sensor_s_fps(struct v4l2_subdev *sd,
+			struct sensor_fps *fps)
+{
+
+	DBG_INFO("\n");
+	return 0;
+}
+static int sensor_s_sw_stby(struct v4l2_subdev *sd, int on_off)
+{
+	int ret;
+	data_type rdval;
+
+#if 0
+	ret = sensor_read(sd, 0x3000, &rdval);
+	if (ret != 0)
+		return ret;
+
+	if (on_off == STBY_ON)
+		ret = sensor_write(sd, 0x3000, rdval | 0x01);
+	else
+		ret = sensor_write(sd, 0x3000, rdval & 0xfe);
+#endif
+	return ret;
+}
+
+/*
+ * Stuff that knows about the sensor.
+ */
 static int sensor_power(struct v4l2_subdev *sd, int on)
 {
+	int ret = 0;
+
 	switch (on) {
 	case STBY_ON:
-		sensor_dbg("CSI_SUBDEV_STBY_ON!\n");
-		sensor_s_sw_stby(sd, ON);
+		DBG_INFO("STBY_ON!\n");
+		cci_lock(sd);
+		ret = sensor_s_sw_stby(sd, STBY_ON);
+		if (ret < 0)
+			sensor_err("soft stby falied!\n");
+		usleep_range(1000, 1200);
+		cci_unlock(sd);
 		break;
 	case STBY_OFF:
-		sensor_dbg("CSI_SUBDEV_STBY_OFF!\n");
-		sensor_s_sw_stby(sd, OFF);
+		DBG_INFO("STBY_OFF!\n");
+		cci_lock(sd);
+		usleep_range(1000, 1200);
+		ret = sensor_s_sw_stby(sd, STBY_OFF);
+		if (ret < 0)
+			sensor_err("soft stby off falied!\n");
+		cci_unlock(sd);
 		break;
 	case PWR_ON:
-		DBG_INFO("CSI_SUBDEV_PWR_ON!\n");
+		DBG_INFO("PWR_ON!\n");
 		cci_lock(sd);
 		vin_gpio_set_status(sd, PWDN, 1);
 		vin_gpio_set_status(sd, RESET, 1);
-		vin_gpio_set_status(sd, SM_HS, 1);
 		vin_gpio_set_status(sd, POWER_EN, 1);
-
-		vin_gpio_write(sd, PWDN, CSI_GPIO_HIGH);
-		vin_gpio_write(sd, SM_HS, CSI_GPIO_HIGH);
-		vin_gpio_write(sd, POWER_EN, CSI_GPIO_HIGH);
 		vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
-
+		vin_gpio_write(sd, PWDN, CSI_GPIO_LOW);
+		vin_gpio_write(sd, POWER_EN, CSI_GPIO_HIGH);
 		vin_set_pmu_channel(sd, IOVDD, ON);
-		vin_set_pmu_channel(sd, AVDD, ON);
+		usleep_range(2000, 2200);
 		vin_set_pmu_channel(sd, DVDD, ON);
-
-		usleep_range(5000, 6000);
-		vin_set_mclk_freq(sd, MCLK);
+		vin_set_pmu_channel(sd, AVDD, ON);
+		
+		usleep_range(30000, 32000);	
+		usleep_range(100, 120);
 		vin_set_mclk(sd, ON);
-		usleep_range(30000, 31000);
-
+		usleep_range(100, 120);
+		vin_set_mclk_freq(sd, MCLK);
+		usleep_range(30000, 32000);	
+							
 		vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
-		usleep_range(30000, 31000);
+		vin_gpio_write(sd, PWDN, CSI_GPIO_HIGH);
+
+		usleep_range(30000, 32000);
 		cci_unlock(sd);
 		break;
 	case PWR_OFF:
-		DBG_INFO("CSI_SUBDEV_PWR_OFF!\n");
-		break;
+		DBG_INFO("PWR_OFF!\n");
 		cci_lock(sd);
+		vin_gpio_set_status(sd, PWDN, 1);
+		vin_gpio_set_status(sd, RESET, 1);
+		vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
+		vin_gpio_write(sd, PWDN, CSI_GPIO_LOW);
 		vin_set_mclk(sd, OFF);
-		vin_set_pmu_channel(sd, DVDD, OFF);
+		vin_set_pmu_channel(sd, AFVDD, OFF);
 		vin_set_pmu_channel(sd, AVDD, OFF);
 		vin_set_pmu_channel(sd, IOVDD, OFF);
-		usleep_range(100, 120);
-		vin_gpio_write(sd, SM_HS, CSI_GPIO_LOW);
-		vin_gpio_write(sd, PWDN, CSI_GPIO_LOW);
-		vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
-		vin_gpio_set_status(sd, SM_HS, 0);
+		vin_set_pmu_channel(sd, DVDD, OFF);
+		vin_gpio_write(sd, POWER_EN, CSI_GPIO_LOW);
 		vin_gpio_set_status(sd, RESET, 0);
 		vin_gpio_set_status(sd, PWDN, 0);
 		vin_gpio_set_status(sd, POWER_EN, 0);
@@ -500,39 +608,29 @@ static int sensor_power(struct v4l2_subdev *sd, int on)
 
 static int sensor_reset(struct v4l2_subdev *sd, u32 val)
 {
-	vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
-	usleep_range(5000, 6000);
-	vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
-	usleep_range(5000, 6000);
+	switch (val) {
+	case 0:
+		vin_gpio_write(sd, RESET, CSI_GPIO_HIGH);
+		usleep_range(10000, 12000);
+		break;
+	case 1:
+		vin_gpio_write(sd, RESET, CSI_GPIO_LOW);
+		usleep_range(10000, 12000);
+		break;
+	default:
+		return -EINVAL;
+	}
 	return 0;
 }
 
 static int sensor_detect(struct v4l2_subdev *sd)
 {
-	data_type rdval, rdval1, rdval2;
-	int cnt = 0;
+	data_type rdval = 0;
 
-	rdval = 0;
-	rdval1 = 0;
-	rdval2 = 0;
-	
-	DBG_INFO("\n");	
-
-	sensor_read(sd, 0xfe, &rdval1);
-	sensor_read(sd, 0xff, &rdval2);
-	rdval = ((rdval2<<8) & 0xff00) | rdval1;
-	DBG_INFO("V4L2_IDENT_SENSOR = 0x%x\n", rdval);
-
-	while ((rdval != V4L2_IDENT_SENSOR) && (cnt < 5)) {
-		sensor_read(sd, 0xff, &rdval);
-		DBG_INFO("retry = %d, V4L2_IDENT_SENSOR = %x\n", cnt,
-			     rdval);
-		cnt++;
-	}
-
-	if (rdval != V4L2_IDENT_SENSOR)
-		return -ENODEV;
-    DBG_INFO("tp9950 detect ok !!!");
+	sensor_read(sd, 0xFE, &rdval);
+	DBG_INFO("%s read value is 0x%x\n", __func__, rdval);
+	sensor_read(sd, 0xFF, &rdval);
+	DBG_INFO("%s read value is 0x%x\n", __func__, rdval);
 	return 0;
 }
 
@@ -558,9 +656,8 @@ static int sensor_init(struct v4l2_subdev *sd, u32 val)
 	info->vflip = 0;
 
 	info->tpf.numerator = 1;
-	info->tpf.denominator = 25;	/* 25fps */
+	info->tpf.denominator = 30;	/* 30fps */
 
-	info->preview_first_flag = 1;
 	return 0;
 }
 
@@ -572,9 +669,8 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	switch (cmd) {
 	case GET_CURRENT_WIN_CFG:
 		if (info->current_wins != NULL) {
-			memcpy(arg,
-			       info->current_wins,
-			       sizeof(struct sensor_win_size));
+			memcpy(arg, info->current_wins,
+				sizeof(struct sensor_win_size));
 			ret = 0;
 		} else {
 			sensor_err("empty wins!\n");
@@ -582,6 +678,13 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 		}
 		break;
 	case SET_FPS:
+		ret = 0;
+		break;
+	case VIDIOC_VIN_SENSOR_EXP_GAIN:
+		ret = sensor_s_exp_gain(sd, (struct sensor_exp_gain *)arg);
+		break;
+	case VIDIOC_VIN_SENSOR_SET_FPS:
+		ret = sensor_s_fps(sd, (struct sensor_fps *)arg);
 		break;
 	case VIDIOC_VIN_SENSOR_CFG_REQ:
 		sensor_cfg_req(sd, (struct sensor_config *)arg);
@@ -597,11 +700,13 @@ static long sensor_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
  */
 static struct sensor_format_struct sensor_formats[] = {
 	{
-	.desc = "BT656 1CH",
-	.mbus_code = MEDIA_BUS_FMT_UYVY8_2X8,
-	.regs = NULL,
-	.regs_size = 0,
-	.bpp = 1,
+		.desc = "Raw RGB Bayer",
+		//.mbus_code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		//.mbus_code = MEDIA_BUS_FMT_YUYV8_1X16,
+		.mbus_code = MEDIA_BUS_FMT_UYVY8_1X16,
+		.regs = sensor_fmt_raw,
+		.regs_size = ARRAY_SIZE(sensor_fmt_raw),
+		.bpp = 4
 	},
 };
 #define N_FMTS ARRAY_SIZE(sensor_formats)
@@ -612,53 +717,92 @@ static struct sensor_format_struct sensor_formats[] = {
 
 static struct sensor_win_size sensor_win_sizes[] = {
 	{
-	 .width = HD1080_WIDTH,
-	 .height = HD1080_HEIGHT,
+	 .width = 1920,
+	 .height = 1080,
 	 .hoffset = 0,
 	 .voffset = 0,
-	 .fps_fixed = 30,
-	 .regs = reg_1080p30_1ch,
-	 .regs_size = ARRAY_SIZE(reg_1080p30_1ch),
-	 .set_size = NULL,
-	},
-	{
-	 .width = HD1080_WIDTH,
-	 .height = HD1080_HEIGHT,
-	 .hoffset = 0,
-	 .voffset = 0,
+	 .pclk = 594 * 1000 * 1000,
+	 .mipi_bps = 1188 * 1000 * 1000,
 	 .fps_fixed = 25,
-	 .regs = reg_1080p25_1ch,
-	 .regs_size = ARRAY_SIZE(reg_1080p25_1ch),
+	 .if_mode = MIPI_VC_WDR_MODE,
+	 .bin_factor = 1,
+	 .intg_min = 4 << 4,
+	 .intg_max = (4620 - 12) << 4,
+	 .gain_min = 1 << 4,
+	 .gain_max = 1440 << 4,
+	 .regs = reg_1080p25_4ch,
+	 .regs_size = ARRAY_SIZE(reg_1080p25_4ch),
 	 .set_size = NULL,
-	},
+	 .top_clk = 384*1000*1000,
+	 .isp_clk = 360*1000*1000,
+	 },
+
 };
+
 #define N_WIN_SIZES (ARRAY_SIZE(sensor_win_sizes))
 
 static int sensor_g_mbus_config(struct v4l2_subdev *sd,
 				struct v4l2_mbus_config *cfg)
 {
-	cfg->type = V4L2_MBUS_BT656;
-	cfg->flags = CLK_POL | CSI_CH_0;
+	struct sensor_info *info = to_state(sd);
+
+	cfg->type = V4L2_MBUS_CSI2;
+	//cfg->type = V4L2_MBUS_BT656;
+
+	//cfg->flags = 0 | V4L2_MBUS_CSI2_4_LANE | V4L2_MBUS_CSI2_CHANNEL_0;
+	cfg->flags = 0 | V4L2_MBUS_CSI2_4_LANE | V4L2_MBUS_CSI2_CHANNEL_0 | V4L2_MBUS_CSI2_CHANNEL_1 | V4L2_MBUS_CSI2_CHANNEL_2 | V4L2_MBUS_CSI2_CHANNEL_3;
+
 	return 0;
 }
 
 static int sensor_g_ctrl(struct v4l2_ctrl *ctrl)
 {
+	struct sensor_info *info =
+			container_of(ctrl->handler, struct sensor_info, handler);
+	struct v4l2_subdev *sd = &info->sd;
+
+	switch (ctrl->id) {
+	case V4L2_CID_GAIN:
+		return sensor_g_gain(sd, &ctrl->val);
+	case V4L2_CID_EXPOSURE:
+		return sensor_g_exp(sd, &ctrl->val);
+	}
 	return -EINVAL;
 }
 
 static int sensor_s_ctrl(struct v4l2_ctrl *ctrl)
 {
+	struct sensor_info *info =
+			container_of(ctrl->handler, struct sensor_info, handler);
+	struct v4l2_subdev *sd = &info->sd;
+
+	switch (ctrl->id) {
+	case V4L2_CID_GAIN:
+		return sensor_s_gain(sd, ctrl->val);
+	case V4L2_CID_EXPOSURE:
+		return sensor_s_exp(sd, ctrl->val);
+	}
 	return -EINVAL;
 }
 
 static int sensor_reg_init(struct sensor_info *info)
 {
+	int ret;
+	data_type rdval_l, rdval_h;
 	struct v4l2_subdev *sd = &info->sd;
 	struct sensor_format_struct *sensor_fmt = info->fmt;
 	struct sensor_win_size *wsize = info->current_wins;
+	struct sensor_exp_gain exp_gain;
 
-	sensor_dbg("sensor_reg_init\n");
+#if 0
+	ret = sensor_write_array(sd, sensor_default_regs,
+				 ARRAY_SIZE(sensor_default_regs));
+	if (ret < 0) {
+		sensor_err("write sensor_default_regs error\n");
+		return ret;
+	}
+#endif
+	DBG_INFO("sensor_reg_init\n");
 
 	sensor_write_array(sd, sensor_fmt->regs, sensor_fmt->regs_size);
 
@@ -668,9 +812,11 @@ static int sensor_reg_init(struct sensor_info *info)
 	if (wsize->set_size)
 		wsize->set_size(sd);
 
-	info->fmt = sensor_fmt;
 	info->width = wsize->width;
 	info->height = wsize->height;
+
+	DBG_INFO("s_fmt set width = %d, height = %d\n", wsize->width,
+		     wsize->height);
 
 	return 0;
 }
@@ -729,7 +875,7 @@ static void sensor_det_work(struct work_struct *work)
 	}
 
 #if DET_USE_POLLING
-	schedule_delayed_work(&sensor_indetect.tp9950_work, (msecs_to_jiffies(1 * 1000)));
+	schedule_delayed_work(&sensor_indetect.tp9930_work, (msecs_to_jiffies(1 * 1000)));
 #endif
 #if 0
 	memset(buf, 0, 32);
@@ -747,22 +893,20 @@ static void sensor_det_work(struct work_struct *work)
 static irqreturn_t sensor_det_irq_func(int irq, void *priv)
 {
 	/* the work of detected was be run in workquen */
-	//schedule_delayed_work(&sensor_indetect.tp9950_work, 0);
+	//schedule_delayed_work(&sensor_indetect.tp9930_work, 0);
 	DBG_INFO("irq:%d\n", irq);
 	return IRQ_HANDLED;
 }
 #endif
 
 #endif
-
 static int sensor_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct sensor_info *info = to_state(sd);
 
 	DBG_INFO("%s on = %d, %d*%d fps: %d code: %x\n", __func__, enable,
-			info->current_wins->width, info->current_wins->height,
-			info->current_wins->fps_fixed, info->fmt->mbus_code);
-
+		     info->current_wins->width, info->current_wins->height,
+		     info->current_wins->fps_fixed, info->fmt->mbus_code);
 
 	if (!enable)
 		return 0;
@@ -803,7 +947,6 @@ static const struct v4l2_subdev_ops sensor_ops = {
 	.pad = &sensor_pad_ops,
 };
 
-
 /* ----------------------------------------------------------------------- */
 static struct cci_driver cci_drv = {
 	.name = SENSOR_NAME,
@@ -811,8 +954,7 @@ static struct cci_driver cci_drv = {
 	.data_width = CCI_BITS_8,
 };
 
-static int sensor_init_controls(struct v4l2_subdev *sd,
-				const struct v4l2_ctrl_ops *ops)
+static int sensor_init_controls(struct v4l2_subdev *sd, const struct v4l2_ctrl_ops *ops)
 {
 	struct sensor_info *info = to_state(sd);
 	struct v4l2_ctrl_handler *handler = &info->handler;
@@ -897,7 +1039,7 @@ static ssize_t get_det_status_show(struct device *dev,
 	return sprintf(buf, "0x%x\n", val);
 }
 #ifdef DUMP_TEST
-static ssize_t get_tp9950_dump0_show(struct device *dev,
+static ssize_t get_tp9930_dump0_show(struct device *dev,
         struct device_attribute *attr, char *buf)
 {
     ssize_t val;
@@ -908,14 +1050,14 @@ static ssize_t get_tp9950_dump0_show(struct device *dev,
     for(i = 0 ; i< ARRAY_SIZE(reg_dump) ; i++)
     {
         
-        sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
-        sensor_print("habo--->0x40=0x00 0x%x = 0x%x \n",reg_dump[i].addr,value_);
+        sensor_read(cci_drv.sd,reg_dump[i].addr, &value_);
+        sensor_print("0x40=0x00 0x%02X = 0x%02X \n",reg_dump[i].addr,value_);
         value_ = 0;
     }
     return val;
 }
 
-static ssize_t get_tp9950_dump1_show(struct device *dev,
+static ssize_t get_tp9930_dump1_show(struct device *dev,
 struct device_attribute *attr, char *buf)
 {
     ssize_t val;
@@ -927,53 +1069,73 @@ struct device_attribute *attr, char *buf)
     {
         
         sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
-        sensor_print("habo--->0x40=0x01 0x%x = 0x%x \n",reg_dump[i].addr,value_);
+        sensor_print("0x40=0x01 0x%02X = 0x%02X \n",reg_dump[i].addr,value_);
         value_ = 0;
     }
 
     return val;
 }
 
-static ssize_t get_tp9950_dump2_show(struct device *dev,
+static ssize_t get_tp9930_dump2_show(struct device *dev,
 struct device_attribute *attr, char *buf)
 {
-ssize_t val;
-data_type  value_ = 0;
-int i= 0;
+	ssize_t val;
+	data_type  value_ = 0;
+	int i= 0;
 
-sensor_print("habo-->ready to write the 0x40=0x02\n");
-sensor_write(cci_drv.sd, 0x40, 0x02);
-for(i = 0 ; i< ARRAY_SIZE(reg_dump) ; i++)
-{
-    
-    sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
-    sensor_print("habo--->0x40=0x02 0x%x = 0x%x \n",reg_dump[i].addr,value_);
-    value_ = 0;
+	sensor_print("habo-->ready to write the 0x40=0x02\n");
+	sensor_write(cci_drv.sd, 0x40, 0x02);
+	for(i = 0 ; i< ARRAY_SIZE(reg_dump) ; i++)
+	{
+		
+		sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
+		sensor_print("0x40=0x02 0x%02X = 0x%02X \n",reg_dump[i].addr,value_);
+		value_ = 0;
+	}
+
+	return val;
 }
 
-return val;
-}
-
-static ssize_t get_tp9950_dump3_show(struct device *dev,
+static ssize_t get_tp9930_dump3_show(struct device *dev,
 struct device_attribute *attr, char *buf)
 {
-ssize_t val;
-int i= 0;
+	ssize_t val;
+	int i= 0;
 
-data_type  value_ = 0;
-sensor_print("habo-->ready to write the 0x40=0x03\n");
-sensor_write(cci_drv.sd, 0x40, 0x03);
-for(i = 0 ; i< ARRAY_SIZE(reg_dump) ; i++)
+	data_type  value_ = 0;
+	sensor_print("habo-->ready to write the 0x40=0x03\n");
+	sensor_write(cci_drv.sd, 0x40, 0x03);
+	for(i = 0 ; i< ARRAY_SIZE(reg_dump) ; i++)
+	{
+		
+		sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
+		sensor_print("0x40=0x02 0x%02X = 0x%02X \n",reg_dump[i].addr,value_);
+		value_ = 0;
+	}
+
+	return val;
+}
+
+
+static ssize_t get_tp9930_dump8_show(struct device *dev,
+struct device_attribute *attr, char *buf)
 {
-    
-    sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
-    sensor_print("habo--->0x40=0x03 0x%x = 0x%x \n",reg_dump[i].addr,value_);
-    value_ = 0;
-}
+	ssize_t val;
+	int i= 0;
 
-return val;
-}
+	data_type  value_ = 0;
+	sensor_print("habo-->ready to write the 0x40=0x08\n");
+	sensor_write(cci_drv.sd, 0x40, 0x08);
+	for(i = 0 ; i< ARRAY_SIZE(reg_dump) ; i++)
+	{
+		
+		sensor_read(cci_drv.sd,reg_dump[i].addr,&value_);
+		sensor_print("0x40=0x08 0x%02X = 0x%02X \n",reg_dump[i].addr,value_);
+		value_ = 0;
+	}
 
+	return val;
+}
 
 #endif
 #ifdef DUMP_TEST
@@ -993,7 +1155,7 @@ static struct device_attribute  detect_dev_attrs[] = {
     		.name = "dump0",
     		.mode =  S_IRUGO,
     	},
-    	.show =  get_tp9950_dump0_show,
+    	.show =  get_tp9930_dump0_show,
     	.store = NULL,
     },
         {
@@ -1001,7 +1163,7 @@ static struct device_attribute  detect_dev_attrs[] = {
     		.name = "dump1",
     		.mode =  S_IRUGO,
     	},
-    	.show =  get_tp9950_dump1_show,
+    	.show =  get_tp9930_dump1_show,
     	.store = NULL,
     },
         {
@@ -1009,7 +1171,7 @@ static struct device_attribute  detect_dev_attrs[] = {
     		.name = "dump2",
     		.mode =  S_IRUGO,
     	},
-    	.show =  get_tp9950_dump2_show,
+    	.show =  get_tp9930_dump2_show,
     	.store = NULL,
     },
         {
@@ -1017,25 +1179,34 @@ static struct device_attribute  detect_dev_attrs[] = {
     		.name = "dump3",
     		.mode =  S_IRUGO,
     	},
-    	.show =  get_tp9950_dump3_show,
+    	.show =  get_tp9930_dump3_show,
     	.store = NULL,
     },
+        {
+    	.attr = {
+    		.name = "dump8",
+    		.mode =  S_IRUGO,
+    	},
+    	.show =  get_tp9930_dump8_show,
+    	.store = NULL,
+    },	
     
 };
 #else
 static struct device_attribute  detect_dev_attrs = {
-	.attr = {
-		.name = "online",
-		.mode =  S_IRUGO,
-	},
-	.show =  get_det_status_show,
-	.store = NULL,
-
+    	.attr = {
+    		.name = "online",
+    		.mode =  S_IRUGO,
+    	},
+    	.show =  get_det_status_show,
+    	.store = NULL,
+    
 };
 
 
 #endif
-static int tp9950_sensor_det_init(struct i2c_client *client)
+
+static int tp9930_sensor_det_init(struct i2c_client *client)
 {
 	int ret;
 	struct device_node *np = NULL;
@@ -1044,26 +1215,32 @@ static int tp9950_sensor_det_init(struct i2c_client *client)
 
 	DBG_INFO("\n");
 	/* enable detect work queue */
-	INIT_DELAYED_WORK(&sensor_indetect.tp9950_work, sensor_det_work);
-	np = of_find_node_by_name(NULL, "tp9950_detect");
+	INIT_DELAYED_WORK(&sensor_indetect.tp9930_work, sensor_det_work);
+	np = of_find_node_by_name(NULL, "tp9930_detect");
 	if (np == NULL) {
-		sensor_err("can not find the tp9950_detect node, will not \
+		sensor_err("can not find the tp9930_detect node, will not \
 			   enable detect kthread\n");
 		return -1;
 	}
-	sensor_indetect.detect_power.gpio = of_get_named_gpio_flags(np, "gpio_power", 0,
-	    (enum of_gpio_flags *)(&(sensor_indetect.detect_power)));
+	for(index = 0; index < DETECT_GPIO_MAX; ++index){
+		memset(key_buf, 0, 64);
+		sprintf(key_buf, "gpio_power_%d", index);
+		DBG_INFO("key_buf:%s\n", key_buf);
+		sensor_indetect.detect_power[index].gpio = of_get_named_gpio_flags(np, key_buf, 0,
+			(enum of_gpio_flags *)(&(sensor_indetect.detect_power)));
 
-	DBG_INFO("detect_power:%d\n", sensor_indetect.detect_power.gpio);
-	if(gpio_is_valid(sensor_indetect.detect_power.gpio)){
-		/* enable the detect power*/
-		ret = gpio_request(sensor_indetect.detect_power.gpio, NULL);
-		DBG_INFO("ret:%d\n", ret);
-		if (ret < 0) {
-			sensor_err("enable tp9950 sensor detect fail!!\n");		
-		}else{
-			gpio_direction_output(sensor_indetect.detect_power.gpio, 1);
+		DBG_INFO("detect_power:%d\n", sensor_indetect.detect_power[index].gpio);
+		if(gpio_is_valid(sensor_indetect.detect_power[index].gpio)){
+			/* enable the detect power*/
+			ret = gpio_request(sensor_indetect.detect_power[index].gpio, NULL);
+			DBG_INFO("ret:%d\n", ret);
+			if (ret < 0) {
+				sensor_err("enable tp9930 sensor detect fail!!\n");		
+			}else{
+				gpio_direction_output(sensor_indetect.detect_power[index].gpio, 1);
+			}
 		}
+		usleep_range(10 * 1000, 12 * 1000);
 	}
 	sensor_indetect.detect_gpio_count = 0;
 	for(index = 0; index < DETECT_GPIO_MAX; ++index){
@@ -1083,9 +1260,9 @@ static int tp9950_sensor_det_init(struct i2c_client *client)
 #if !DET_USE_POLLING				
 				/* request gpio to irq  */
 				sensor_indetect.detect_irq[sensor_indetect.detect_gpio_count] = gpio_to_irq(sensor_indetect.detect_gpio[sensor_indetect.detect_gpio_count].gpio);
-				//ret = request_irq(sensor_indetect.detect_irq[sensor_indetect.detect_gpio_count], sensor_det_irq_func,	IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,	"tp9950_sensor_detect", client);
+				//ret = request_irq(sensor_indetect.detect_irq[sensor_indetect.detect_gpio_count], sensor_det_irq_func,	IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,	"tp9930_sensor_detect", client);
 				ret = devm_request_threaded_irq(sensor_indetect.dev, sensor_indetect.detect_irq[sensor_indetect.detect_gpio_count],
-					  NULL, sensor_det_irq_func, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING  | IRQF_ONESHOT, "tp9950_sensor_detect", client);	
+					  NULL, sensor_det_irq_func, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING  | IRQF_ONESHOT, "tp9930_sensor_detect", client);	
 				DBG_INFO("ret:%d\n", ret);
 				enable_irq(sensor_indetect.detect_irq[sensor_indetect.detect_gpio_count]);
 #endif				
@@ -1096,18 +1273,20 @@ static int tp9950_sensor_det_init(struct i2c_client *client)
 	}
 
 #if DET_USE_POLLING	
-	DBG_INFO("sensor_indetect.detect_gpio_count:%d\n", sensor_indetect.detect_gpio_count);
 	/* start detect work  */
 	if(sensor_indetect.detect_gpio_count){
-		schedule_delayed_work(&sensor_indetect.tp9950_work, 0);
+		schedule_delayed_work(&sensor_indetect.tp9930_work, 0);
 	}
 #endif
+
+	
+
 	return 0;
 }
 
-static void tp9950_sensor_det_remove(void)
+static void tp9930_sensor_det_remove(void)
 {
-	cancel_delayed_work_sync(&sensor_indetect.tp9950_work);
+	cancel_delayed_work_sync(&sensor_indetect.tp9930_work);
 
 #if !DET_USE_POLLING
 	/*free irq*/
@@ -1125,21 +1304,25 @@ static void tp9950_sensor_det_remove(void)
 }
 
 #endif
+static int sensor_dev_id;
 
 static int sensor_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
 	struct v4l2_subdev *sd;
 	struct sensor_info *info;
-	int ret;
-    int i = 0;
+	int i, ret;
+
 	info = kzalloc(sizeof(struct sensor_info), GFP_KERNEL);
 	if (info == NULL)
 		return -ENOMEM;
 	sd = &info->sd;
 
+
 	cci_dev_probe_helper(sd, client, &sensor_ops, &cci_drv);
+
 	sensor_init_controls(sd, &sensor_ctrl_ops);
+
 	mutex_init(&info->lock);
 
 	info->fmt = &sensor_formats[0];
@@ -1148,7 +1331,13 @@ static int sensor_probe(struct i2c_client *client,
 	info->fmt_num = N_FMTS;
 	info->win_size_num = N_WIN_SIZES;
 	info->sensor_field = V4L2_FIELD_NONE;
-
+	info->combo_mode = CMB_TERMINAL_RES | CMB_PHYA_OFFSET2 | MIPI_NORMAL_MODE;
+	info->time_hs = 0x10;
+	info->stream_seq = MIPI_BEFORE_SENSOR;
+	info->af_first_flag = 1;
+	info->exp = 0;
+	info->gain = 0;
+	
 #if SENSOR_DETECT_KTHREAD
 	alloc_chrdev_region(&sensor_indetect.devno, 0, 1, "csi");
 	sensor_indetect.cdev = cdev_alloc();
@@ -1196,8 +1385,8 @@ static int sensor_probe(struct i2c_client *client,
 	}
     #endif
 	DBG_INFO("\n");
-	/* init tp9950 detect mode */
-	ret = tp9950_sensor_det_init(client);
+	/* init tp9930 detect mode */
+	ret = tp9930_sensor_det_init(client);
 	if (ret) {
 		goto free_det;
 	}
@@ -1206,7 +1395,7 @@ static int sensor_probe(struct i2c_client *client,
 
 
 free_det:
-	tp9950_sensor_det_remove();
+	tp9930_sensor_det_remove();
 
 free_class:
 	class_destroy(sensor_indetect.sensor_class);
@@ -1234,11 +1423,11 @@ free_devno:
 static int sensor_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd;
+	int i;
 
 	sd = cci_dev_remove_helper(client, &cci_drv);
-
 #if SENSOR_DETECT_KTHREAD
-	tp9950_sensor_det_remove();
+	tp9930_sensor_det_remove();
 
 	device_destroy(sensor_indetect.sensor_class, sensor_indetect.devno);
 	class_destroy(sensor_indetect.sensor_class);
@@ -1246,29 +1435,8 @@ static int sensor_remove(struct i2c_client *client)
 	kfree(sensor_indetect.cdev);
 	unregister_chrdev_region(sensor_indetect.devno, 1);
 #endif
-
 	kfree(to_state(sd));
 	return 0;
-}
-
-
-static void sensor_shutdown(struct i2c_client *client)
-{
-	struct v4l2_subdev *sd;
-
-	sd = cci_dev_remove_helper(client, &cci_drv);
-
-#if SENSOR_DETECT_KTHREAD
-	tp9950_sensor_det_remove();
-
-	device_destroy(sensor_indetect.sensor_class, sensor_indetect.devno);
-	class_destroy(sensor_indetect.sensor_class);
-	cdev_del(sensor_indetect.cdev);
-	kfree(sensor_indetect.cdev);
-	unregister_chrdev_region(sensor_indetect.devno, 1);
-
-#endif
-	kfree(to_state(sd));
 }
 
 static const struct i2c_device_id sensor_id[] = {
@@ -1280,12 +1448,11 @@ MODULE_DEVICE_TABLE(i2c, sensor_id);
 
 static struct i2c_driver sensor_driver = {
 	.driver = {
-		   .owner = THIS_MODULE,
-		   .name = SENSOR_NAME,
-		   },
+			.owner = THIS_MODULE,
+			.name = SENSOR_NAME,
+			},
 	.probe = sensor_probe,
 	.remove = sensor_remove,
-	.shutdown = sensor_shutdown,
 	.id_table = sensor_id,
 };
 static __init int init_sensor(void)

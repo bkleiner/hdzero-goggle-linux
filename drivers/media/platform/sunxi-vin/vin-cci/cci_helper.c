@@ -33,6 +33,9 @@
 #define cci_err(x, arg...) pr_err("[VIN_DEV_I2C_ERR]"x, ##arg)
 #endif
 
+
+void cci_s_power(unsigned int sel, int on_off);
+
 static void cci_device_release(struct device *dev)
 {
 
@@ -248,6 +251,10 @@ EXPORT_SYMBOL_GPL(cci_bus_match_cancel);
 
 void csi_cci_init_helper(unsigned int sel)
 {
+#ifdef CONFIG_CCI_TO_TWI
+	if(sel >= 4)
+		cci_s_power(sel - 4, 1);
+#endif
 #ifdef USE_SPECIFIC_CCI
 	cci_s_power(sel, 1);
 #endif
@@ -256,6 +263,10 @@ EXPORT_SYMBOL_GPL(csi_cci_init_helper);
 
 void csi_cci_exit_helper(unsigned int sel)
 {
+#ifdef CONFIG_CCI_TO_TWI
+	if(sel >= 4)
+		cci_s_power(sel - 4, 0);
+#endif
 #ifdef USE_SPECIFIC_CCI
 	cci_s_power(sel, 0);
 #endif

@@ -128,6 +128,24 @@ config GPIO_AXP209
 	help
 	  Say yes to enable GPIO support for the AXP209 PMIC
 
+
+
+config GPIO_KEYS
+	tristate "GPIO_KEYS"
+	default y 
+	help
+	  Select this option to enable GPIO driver for gpio-keys
+
+config ROTARY_ENCODER
+	tristate "ROTARY_ENCODER"
+	default y 
+	help
+	  Select this option to enable GPIO driver for rotary-encoder 
+
+
+
+
+
 config GPIO_SUNXI
 	tristate "SUNXI GPIO Support"
 	help

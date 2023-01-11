@@ -324,6 +324,7 @@ static int __vin_set_isp_clk_rate(struct vin_md *vind, unsigned int rate)
 		vind->isp_clk[VIN_ISP_CLK_SRC].frequency = ISP_CLK_RATE;
 
 #if defined CONFIG_ARCH_SUN8IW16P1
+	clk_get_rate(vind->isp_clk[VIN_ISP_CLK_SRC].clock);
 	if (clk_set_rate(vind->isp_clk[VIN_ISP_CLK_SRC].clock,
 	    vind->isp_clk[VIN_ISP_CLK_SRC].frequency)) {
 		vin_err("set vin isp clock source rate error\n");
@@ -398,6 +399,11 @@ static int vin_md_clk_enable(struct vin_md *vind)
 
 static void vin_md_clk_disable(struct vin_md *vind)
 {
+
+#ifdef CONFIG_CCI_ALWAYS_ON
+	return;
+#endif
+
 #ifndef FPGA_VER
 	if (vind->clk[VIN_TOP_CLK].clock) {
 		clk_disable_unprepare(vind->clk[VIN_TOP_CLK].clock);
@@ -1733,8 +1739,10 @@ static int vin_probe(struct platform_device *pdev)
 		ret = -ENOSYS;
 		goto err_clk;
 	}
-	vin_md_clk_disable(vind);
 
+#ifndef CONFIG_CCI_ALWAYS_ON
+	vin_md_clk_disable(vind);
+#endif
 	mutex_lock(&vind->media_dev.graph_mutex);
 	ret = vin_create_media_links(vind);
 	mutex_unlock(&vind->media_dev.graph_mutex);

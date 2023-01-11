@@ -119,11 +119,6 @@ static int sunxi_snddaudio_hw_params(struct snd_pcm_substream *substream,
 			SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBS_CFS);
 	if (ret < 0)
 		dev_warn(card->dev, "codec dai set fmt failed\n");
-
-	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_I2S |
-			SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBS_CFS);
-	if (ret < 0)
-		dev_warn(card->dev, "cup dai set fmt failed\n");
 #endif
 
 	/* set system clk div */

@@ -1155,12 +1155,12 @@ int vin_core_suspend(struct device *d)
 			mutex_unlock(&cap->vdev.entity.graph_obj.mdev->graph_mutex);
 			return -1;
 		}
-
+/*
 		if (cap->pipe.sd[VIN_IND_ISP] != NULL) {
 			isp = container_of(cap->pipe.sd[VIN_IND_ISP], struct isp_dev, subdev);
 			isp->runtime_flag = 1;
 		}
-
+*/
 		clear_bit(VIN_STREAM, &cap->state);
 		ret = vin_pipeline_call(vinc, set_stream, &cap->pipe, 0);
 		if (ret)
@@ -1199,11 +1199,12 @@ int vin_core_resume(struct device *d)
 
 	if (vin_busy(cap)) {
 		mutex_lock(&cap->vdev.entity.graph_obj.mdev->graph_mutex);
+/*
 		if (cap->pipe.sd[VIN_IND_ISP] != NULL) {
 			isp = container_of(cap->pipe.sd[VIN_IND_ISP], struct isp_dev, subdev);
 			isp->runtime_flag = 0;
 		}
-
+*/
 		ret = vin_pipeline_call(vinc, open, &cap->pipe, &cap->vdev.entity, true);
 		if (ret < 0)
 			vin_err("vin pipeline open failed (%d)!\n", ret);

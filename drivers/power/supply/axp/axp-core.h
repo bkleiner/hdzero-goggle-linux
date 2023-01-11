@@ -74,6 +74,7 @@ struct axp_dev {
 	int                      nr_cells;
 	struct mfd_cell          *cells;
 	struct axp_irq_chip_data *irq_data;
+	int			 axp_sub;
 	int                      irq;
 	bool                     is_dummy;
 	bool                     is_slave;

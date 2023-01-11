@@ -87,6 +87,7 @@ enum axp210x_regaddr_index {
 	AXP210X_REG_IIN_LIM,
 	AXP210X_REG_ICC_CFG,
 	AXP210X_COMM_STAT1,
+	AXP210X_COMM_STAT0,
 	AXP210X_CHGLED_CFG,
 };
 
@@ -127,6 +128,7 @@ struct axp210x_device_info {
 	struct gpio_desc          *gpiod;
 	struct axp_regmap         *regmap;
 	int                        virq;
+	int                        version;
 	struct power_supply       *bat;
 	struct power_supply       *usb;
 	struct power_supply       *ac;
