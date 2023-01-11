@@ -25,7 +25,7 @@
 		serial1 = &uart1;
 		serial2 = &uart2;
 		serial3 = &uart3;
-		serial4 = &uart4;
+		serial4 = &uart4;	
 		twi0 = &twi0;
 		twi1 = &twi1;
 		twi2 = &twi2;

@@ -402,7 +402,7 @@ static int sunxi_isp_subdev_s_stream(struct v4l2_subdev *sd, int enable)
 			} else
 				isp->runtime_flag = 0;
 		}
-		if (isp->wdr_mode != ISP_NORMAL_MODE) {
+		if (isp->wdr_mode == ISP_DOL_WDR_MODE) {
 			if (isp_wdr_pingpong_alloc(isp)) {
 				isp_3d_pingpong_free(isp);
 				return -ENOMEM;
@@ -506,7 +506,7 @@ static int sunxi_isp_subdev_s_stream(struct v4l2_subdev *sd, int enable)
 			else
 				isp->runtime_flag = 0;
 		}
-		if (isp->wdr_mode != ISP_NORMAL_MODE) {
+		if (isp->wdr_mode == ISP_DOL_WDR_MODE) {
 			bsp_isp_ch_enable(isp->id, ISP_CH1, 0);
 			isp_wdr_pingpong_free(isp);
 		}
@@ -1585,9 +1585,9 @@ static irqreturn_t isp_isr(int irq, void *priv)
 			memcpy(isp->isp_load.vir_addr, &isp->load_shadow[0], ISP_LOAD_DRAM_SIZE);
 		isp->isp_ob.set_cnt++;
 		load_val = bsp_isp_load_update_flag(isp->id);
-		if (isp->wdr_mode != ISP_NORMAL_MODE)
+		if (isp->wdr_mode == ISP_DOL_WDR_MODE)
 			isp_wdr_pingpong_set(isp);
-		else {
+		else if (isp->wdr_mode == ISP_NORMAL_MODE) {
 			vin_log(VIN_LOG_ISP, "please close wdr in normal mode!!\n");
 			load_val = load_val & ~WDR_UPDATE;
 			bsp_isp_module_disable(isp->id, WDR_EN);

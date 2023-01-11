@@ -26,6 +26,39 @@ struct sunxi_reg_ops {
 	void (*reg_writel)(u32 val, void __iomem *reg);
 };
 
+#ifdef CONFIG_PM_SLEEP
+struct sunxi_factor_clk_reg_cache {
+	struct list_head node;
+	void __iomem *config_reg;
+	u32	config_value;
+	void __iomem *sdmpat_reg;
+	u32 sdmpat_value;
+};
+
+struct sunxi_periph_clk_reg_cache {
+	struct list_head node;
+	void __iomem *mux_reg;
+	u32	mux_value;
+	void __iomem *divider_reg;
+	u32 divider_value;
+	void __iomem *gate_enable_reg;
+	u32 gate_enable_value;
+	void __iomem *gate_reset_reg;
+	u32 gate_reset_value;
+	void __iomem *gate_bus_reg;
+	u32 gate_bus_value;
+	void __iomem *gate_dram_reg;
+	u32 gate_dram_value;
+};
+
+extern struct list_head clk_periph_reg_cache_list;
+extern struct list_head clk_factor_reg_cache_list;
+
+void sunxi_factor_clk_save(struct sunxi_factor_clk_reg_cache *factor_clk_reg);
+void sunxi_factor_clk_restore(struct sunxi_factor_clk_reg_cache *factor_clk_reg);
+void sunxi_periph_clk_save(struct sunxi_periph_clk_reg_cache *periph_clk_reg);
+void sunxi_periph_clk_restore(struct sunxi_periph_clk_reg_cache *periph_clk_reg);
+#endif
 extern spinlock_t clk_lock;
 extern void __iomem *sunxi_clk_base;
 extern void __iomem *sunxi_clk_cpus_base;

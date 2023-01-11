@@ -155,6 +155,7 @@ static inline void periph_writel(struct sunxi_clk_periph *periph, unsigned int v
 		: writel(val, reg));
 }
 
+extern const struct clk_ops sunxi_clk_periph_ops;
 struct clk *sunxi_clk_register_periph(struct periph_init_data *pd,
 					void __iomem  *base);
 

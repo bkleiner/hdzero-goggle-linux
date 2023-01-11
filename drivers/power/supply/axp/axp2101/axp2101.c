@@ -233,7 +233,7 @@ void axp2101_power_off(void)
 
 static int axp2101_init_chip(struct axp_dev *axp2101)
 {
-	uint8_t chip_id, dcdc2_ctl;
+	uint8_t chip_id, dcdc2_ctl, value;
 	int err;
 
 	err = axp_regmap_read(axp2101->regmap, axp2101_CHIP_ID, &chip_id);
@@ -243,10 +243,19 @@ static int axp2101_init_chip(struct axp_dev *axp2101)
 		return err;
 	}
 
-	if (chip_id == 0x47)
+	/*
+	 * axp210 has two, one is 0x47 is bug,
+	 * 0x4a fix it
+	 */
+	if (chip_id == 0x47) {
 		pr_info("[%s] chip id detect 0x%x !\n",
 			axp_name[axp2101_pmu_num], chip_id);
-	else
+		axp2101->axp_sub = 0;
+	} else if (chip_id == 0x4a) {
+		pr_info("[%s] chip id detect 0x%x !\n",
+			axp_name[axp2101_pmu_num], chip_id);
+		axp2101->axp_sub = 1;
+	} else
 		pr_info("[%s] chip id not detect 0x%x !\n",
 			axp_name[axp2101_pmu_num], chip_id);
 

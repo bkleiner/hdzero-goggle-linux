@@ -16,8 +16,6 @@ config TOUCHSCREEN_PROPERTIES
 	default y
 	depends on INPUT
 
-source "drivers/input/touchscreen/gt911/Kconfig"
-
 config TOUCHSCREEN_88PM860X
 	tristate "Marvell 88PM860x touchscreen"
 	depends on MFD_88PM860X

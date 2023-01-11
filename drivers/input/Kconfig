@@ -201,7 +201,7 @@ config INPUT_KEYCOMBO
 	  Say Y here if you want to take action when some keys are pressed;
 
 config INPUT_SENSORINIT
-        bool "sunxi sensor init"
+    tristate  "sunxi sensor init"
         depends on INPUT
         default y
         ---help---

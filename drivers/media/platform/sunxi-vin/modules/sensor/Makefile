@@ -8,7 +8,6 @@
 #obj-m			+= imx274_slvds.o
 #obj-m			+= imx291_dvp.o
 #obj-m			+= imx291_mipi.o
-obj-m			+= imx307_mipi.o
 obj-m			+= imx317_mipi.o
 obj-m			+= imx335_mipi.o
 #obj-m			+= imx326_mipi.o
@@ -25,4 +24,6 @@ obj-m			+= imx386_mipi.o
 #obj-m			+= nvp6324/
 obj-m			+= tp9950.o
 obj-m			+= sc2232_mipi.o
+obj-m			+= tp2854b.o
 obj-m			+= gc2053_mipi.o
+obj-m			+= imx415_mipi.o

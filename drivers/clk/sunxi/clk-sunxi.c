@@ -18,9 +18,15 @@
 #include <linux/clk/sunxi.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/syscore_ops.h>
 #include "clk-sunxi.h"
 #include "clk-factors.h"
 #include "clk-periph.h"
+#ifdef CONFIG_PM_SLEEP
+/*list head use for standby*/
+LIST_HEAD(clk_periph_reg_cache_list);
+LIST_HEAD(clk_factor_reg_cache_list);
+#endif
 
 /*
  * of_sunxi_clocks_init() - Clocks initialize
@@ -188,6 +194,56 @@ void of_sunxi_periph_cpus_clk_setup(struct device_node *node)
 	pr_err("clk %s not found in %s\n", clk_name, __func__);
 }
 
+
+#ifdef CONFIG_PM_SLEEP
+void sunxi_factor_clk_save(struct sunxi_factor_clk_reg_cache *factor_clk_reg)
+{
+	factor_clk_reg->config_value = readl(factor_clk_reg->config_reg);
+	if (factor_clk_reg->sdmpat_reg)
+		factor_clk_reg->sdmpat_value = readl(factor_clk_reg->sdmpat_reg);
+}
+
+void sunxi_factor_clk_restore(struct sunxi_factor_clk_reg_cache *factor_clk_reg)
+{
+	if (factor_clk_reg->sdmpat_reg)
+		writel(factor_clk_reg->sdmpat_value, factor_clk_reg->sdmpat_reg);
+	writel(factor_clk_reg->config_value, factor_clk_reg->config_reg);
+
+}
+
+void sunxi_periph_clk_save(struct sunxi_periph_clk_reg_cache *periph_clk_reg)
+{
+	if (periph_clk_reg->gate_dram_reg)
+		periph_clk_reg->gate_dram_value = readl(periph_clk_reg->gate_dram_reg);
+	if (periph_clk_reg->gate_reset_reg)
+		periph_clk_reg->gate_reset_value = readl(periph_clk_reg->gate_reset_reg);
+	if (periph_clk_reg->gate_enable_reg)
+		periph_clk_reg->gate_enable_value = readl(periph_clk_reg->gate_enable_reg);
+	if (periph_clk_reg->divider_reg)
+		periph_clk_reg->divider_value = readl(periph_clk_reg->divider_reg);
+	if (periph_clk_reg->mux_reg)
+		periph_clk_reg->mux_value = readl(periph_clk_reg->mux_reg);
+	if (periph_clk_reg->gate_bus_reg)
+		periph_clk_reg->gate_bus_value = readl(periph_clk_reg->gate_bus_reg);
+}
+
+void sunxi_periph_clk_restore(struct sunxi_periph_clk_reg_cache *periph_clk_reg)
+{
+	/* we should take care of the order, fix me */
+	if (periph_clk_reg->gate_dram_reg)
+		writel(periph_clk_reg->gate_dram_value, periph_clk_reg->gate_dram_reg);
+	if (periph_clk_reg->gate_reset_reg)
+		writel(periph_clk_reg->gate_reset_value, periph_clk_reg->gate_reset_reg);
+	if (periph_clk_reg->gate_enable_reg)
+		writel(periph_clk_reg->gate_enable_value, periph_clk_reg->gate_enable_reg);
+	if (periph_clk_reg->divider_reg)
+		writel(periph_clk_reg->divider_value, periph_clk_reg->divider_reg);
+	if (periph_clk_reg->mux_reg)
+		writel(periph_clk_reg->mux_value, periph_clk_reg->mux_reg);
+	if (periph_clk_reg->gate_bus_reg)
+		writel(periph_clk_reg->gate_bus_value, periph_clk_reg->gate_bus_reg);
+}
+#endif
 CLK_OF_DECLARE(sunxi_clocks_init, "allwinner,clk-init", of_sunxi_clocks_init);
 CLK_OF_DECLARE(sunxi_fixed_clk, "allwinner,fixed-clock", of_sunxi_fixed_clk_setup);
 CLK_OF_DECLARE(sunxi_pll_clk, "allwinner,pll-clock", of_sunxi_pll_clk_setup);

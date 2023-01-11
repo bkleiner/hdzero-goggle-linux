@@ -99,4 +99,3 @@ obj-$(CONFIG_TOUCHSCREEN_FTS)    += focaltech_touch/
 obj-$(CONFIG_TOUCHSCREEN_IT7257_TS)    += it7257_ts.o
 obj-$(CONFIG_INPUT_TOUCHSCREEN)   += gt9xxnew/
 obj-$(CONFIG_INPUT_TOUCHSCREEN)	  += gt9xx/
-obj-$(CONFIG_INPUT_TOUCHSCREEN_GT911)	  += gt911/

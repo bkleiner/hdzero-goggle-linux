@@ -28,6 +28,10 @@
 #include <linux/of.h>
 #include <asm/unaligned.h>
 #include <linux/gpio/consumer.h>
+#include "gt5688_720x1280_cfg.h"
+
+#define DBG_INFO(format, args...) (printk("[GOODIX 9XX INFO] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
+#define DBG_ERR(format, args...) (printk("[GOODIX 9XX ERR] LINE:%04d-->%s:"format, __LINE__, __func__, ##args))
 
 struct goodix_ts_data {
 	struct i2c_client *client;
@@ -38,9 +42,9 @@ struct goodix_ts_data {
 	int abs_y_max;
 	int offset_x;
 	int offset_y;
-	bool invert_x;
-	bool invert_y;
-	bool swap_xy;
+	int invert_x;
+	int invert_y;
+	int swap_xy;
 	unsigned int max_touch_num;
 	unsigned int int_trigger_type;
 	bool rotated_screen;
@@ -48,7 +52,7 @@ struct goodix_ts_data {
 
 #define GOODIX_MAX_HEIGHT		4096
 #define GOODIX_MAX_WIDTH		4096
-#define GOODIX_INT_TRIGGER		0
+#define GOODIX_INT_TRIGGER		1
 #define GOODIX_CONTACT_SIZE		8
 #define GOODIX_MAX_CONTACTS		10
 
@@ -59,9 +63,9 @@ struct goodix_ts_data {
 #define GOODIX_REG_CONFIG_DATA		0x8047
 #define GOODIX_REG_ID			0x8140
 
-#define RESOLUTION_LOC		1
+//#define RESOLUTION_LOC		1
 #define MAX_CONTACTS_LOC	5
-#define TRIGGER_LOC		6
+//#define TRIGGER_LOC		6
 
 static const unsigned long goodix_irq_flags[] = {
 	IRQ_TYPE_EDGE_RISING,
@@ -95,6 +99,9 @@ static const struct dmi_system_id rotated_screen[] = {
 };
 
 
+static unsigned char config[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
+                = {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
+
 static void goodix_reset(struct goodix_ts_data *ts)
 {
 	if (!ts->reset_gpio)
@@ -110,7 +117,7 @@ static void goodix_reset(struct goodix_ts_data *ts)
  *             \______/
  *
  */
-	printk("reset the tp !!!!!!\n");
+	DBG_INFO("reset the tp !!!!!!\n");
 	gpiod_direction_output(ts->int_gpio, 0);
 	gpiod_direction_output(ts->reset_gpio, 1);
 
@@ -156,6 +163,23 @@ static int goodix_i2c_read(struct i2c_client *client,
 	return ret < 0 ? ret : (ret != ARRAY_SIZE(msgs) ? -EIO : 0);
 }
 
+static int goodix_i2c_write(struct i2c_client *client,
+			   u16 reg, u8 *buf, int len)
+{
+	struct i2c_msg msgs[1];
+	u16 wbuf = cpu_to_be16(reg);
+	int ret;
+
+	msgs[0].flags = !I2C_M_RD;
+	msgs[0].addr  = client->addr;
+	msgs[0].len   = len;
+	msgs[0].buf   = (u8 *)&buf;
+
+	ret = i2c_transfer(client->adapter, msgs, 1);
+	DBG_INFO("ret:%d\n", ret);
+	return ret < 0 ? ret : (ret != ARRAY_SIZE(msgs) ? -EIO : 0);
+}
+
 static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 {
 	int touch_num;
@@ -196,6 +220,8 @@ static void goodix_ts_report_touch(struct goodix_ts_data *ts, u8 *coor_data)
 	int input_y = get_unaligned_le16(&coor_data[3]);
 	int input_w = get_unaligned_le16(&coor_data[5]);
 
+//	DBG_INFO("input_x:%d, input_y:%d\n", input_x, input_y);
+
 	if (ts->rotated_screen) {
 		input_x = ts->abs_x_max - input_x;
 		input_y = ts->abs_y_max - input_y;
@@ -225,7 +251,7 @@ static void goodix_ts_report_touch(struct goodix_ts_data *ts, u8 *coor_data)
 		input_report_abs(ts->input_dev, ABS_MT_POSITION_X, input_x);
 		input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
 	}
-
+//	DBG_INFO("input_x:%d, input_y:%d\n", input_x, input_y);
 	input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, input_w);
 	input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, input_w);
 }
@@ -303,10 +329,12 @@ static void goodix_read_config(struct goodix_ts_data *ts)
 					       will use config in default\n");
 	}
 
-	ts->invert_x = device_property_read_bool(&ts->client->dev,
-						     "touchscreen-inverted-x");
-	ts->invert_y = device_property_read_bool(&ts->client->dev,
-						     "touchscreen-inverted-y");
+	if (device_property_read_u32(&ts->client->dev,
+				     "touchscreen-inverted-x", &ts->invert_x))
+		ts->invert_x = 0;
+	if (device_property_read_u32(&ts->client->dev,
+				     "touchscreen-offset-y", &ts->invert_y))
+		ts->invert_y = 0;
 
 	if (device_property_read_u32(&ts->client->dev,
 				     "touchscreen-offset-x", &ts->offset_x))
@@ -315,13 +343,28 @@ static void goodix_read_config(struct goodix_ts_data *ts)
 				     "touchscreen-offset-y", &ts->offset_y))
 		ts->offset_y = 0;
 
-	ts->swap_xy = device_property_read_bool(&ts->client->dev,
-						    "touchscreen-swapped-x-y");
+	if (device_property_read_u32(&ts->client->dev,
+				     "touchscreen-swapped-x-y", &ts->swap_xy))
+		ts->swap_xy = 0;
 
 	ts->rotated_screen = dmi_check_system(rotated_screen);
 	if (ts->rotated_screen)
 		dev_dbg(&ts->client->dev,
 			 "Applying '180 degrees rotated screen' quirk\n");
+
+	DBG_INFO("abs_x_max:%d, abs_y_max:%d, ts->invert_x:%d, ts->invert_y:%d, ts->swap_xy:%d, ts->rotated_screen:%d\n",
+			  ts->abs_x_max, ts->abs_y_max, ts->invert_x, ts->invert_y, ts->swap_xy, ts->rotated_screen);
+
+#if 0			  
+	ts->invert_x = 1;
+	ts->invert_y = 0;
+	ts->swap_xy  = 1;
+	ts->abs_x_max = 720;
+	ts->abs_y_max = 1280;
+
+	DBG_INFO("abs_x_max:%d, abs_y_max:%d, ts->invert_x:%d, ts->invert_y:%d, ts->swap_xy:%d, ts->rotated_screen:%d\n",
+			  ts->abs_x_max, ts->abs_y_max, ts->invert_x, ts->invert_y, ts->swap_xy, ts->rotated_screen);
+#endif			  
 }
 
 /**
@@ -378,6 +421,49 @@ static int goodix_i2c_test(struct i2c_client *client)
 	}
 
 	return error;
+}
+static int goodix_update_firmware(struct goodix_ts_data *ts)
+{
+	u8 cfg_array[] = CTP_CFG_GROUP1;
+	int error = 0, index;
+	u8 opr_buf[16];
+	int len = sizeof(cfg_array) / sizeof(cfg_array[0]);
+	u8 check_sum;
+	int i;
+
+	DBG_INFO("cfg_array:size:%d, cfg_array[0]:0x%x, len:%d\n", sizeof(cfg_array), cfg_array[0], len);
+	error = goodix_i2c_read(ts->client, GOODIX_REG_CONFIG_DATA, opr_buf, 1);
+	DBG_INFO("error:%d, opr_buf:0x%x\n", error, opr_buf[0]);
+	if(error){
+		DBG_ERR("read GOODIX_REG_CONFIG_DATA:0x%x fail!!\n", GOODIX_REG_CONFIG_DATA);
+		return -1;
+	}
+	memset(&config[GTP_ADDR_LENGTH], 0, GTP_CONFIG_MAX_LENGTH);
+	memcpy(&config[GTP_ADDR_LENGTH], cfg_array, len);
+
+	check_sum = 0;
+	for (i = GTP_ADDR_LENGTH; i < len; i++)
+	{
+		check_sum += config[i];
+	}
+	config[len] = (~check_sum) + 1;
+
+	goodix_i2c_write(ts->client, 0, config, GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
+	#if 0
+	cfg_array[0] = opr_buf[0];
+	error = goodix_i2c_read(ts->client, RESOLUTION_LOC, opr_buf, 4);
+	for(index = 0; index < 4; ++index){
+		DBG_INFO("RESOLUTION_LOC:0x%x, error:%d, opr_buf[%d]:0x%x\n", RESOLUTION_LOC, error, index, opr_buf[index]);
+	}
+	error = goodix_i2c_read(ts->client, TRIGGER_LOC, opr_buf, 1);
+	DBG_INFO("TRIGGER_LOC:0x%x, error:%d, opr_buf:0x%x\n", TRIGGER_LOC, error, opr_buf[0]);
+
+    cfg_array[RESOLUTION_LOC]     = (u8)ts->abs_x_max;
+    cfg_array[RESOLUTION_LOC + 1] = (u8)(ts->abs_x_max >> 8);
+    cfg_array[RESOLUTION_LOC + 2] = (u8)ts->abs_y_max;
+    cfg_array[RESOLUTION_LOC + 3] = (u8)(ts->abs_y_max >> 8);
+	#endif
+
 }
 
 /**
@@ -493,8 +579,11 @@ static int goodix_ts_probe(struct i2c_client *client,
 		dev_err(&client->dev, "Read version failed.\n");
 		return error;
 	}
-
+	DBG_INFO("\n");
 	goodix_read_config(ts);
+	DBG_INFO("\n");
+	goodix_update_firmware(ts);
+	DBG_INFO("\n");
 
 	error = goodix_request_input_dev(ts, version_info, id_info);
 	if (error)

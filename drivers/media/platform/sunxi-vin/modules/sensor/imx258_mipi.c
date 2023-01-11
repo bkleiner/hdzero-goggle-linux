@@ -1196,7 +1196,8 @@ static int sensor_power(struct v4l2_subdev *sd, int on)
 		//printk("%s %d %s\n", __FILE__, __LINE__, __func__);
 		break;
 	case PWR_OFF:
-		sensor_print("PWR_OFF!\n");
+		sensor_print("PWR_OFF!do nothing\n");
+		break;
 		cci_lock(sd);
 		//printk("%s %d %s\n", __FILE__, __LINE__, __func__);
 		vin_gpio_set_status(sd, PWDN, 1);
@@ -1333,7 +1334,7 @@ static struct sensor_format_struct sensor_formats[] = {
  */
 
 static struct sensor_win_size sensor_win_sizes[] = {
-#if 1
+#if 0
 	{
 		.width		= 4096,
 		.height 	= 2160,

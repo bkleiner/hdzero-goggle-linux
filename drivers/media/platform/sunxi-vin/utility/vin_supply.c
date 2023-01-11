@@ -174,7 +174,10 @@ int vin_set_mclk(struct v4l2_subdev *sd, enum on_off on_off)
 		return 0;
 	else if (!on_off && (mclk->use_count == 0 || --mclk->use_count > 0))
 		return 0;
-
+#ifdef CONFIG_CCI_ALWAYS_ON
+	if (!on_off)
+		return 0;
+#endif
 	switch (on_off) {
 	case ON:
 		vin_log(VIN_LOG_POWER, "sensor mclk on, use_count %d!\n", mclk->use_count);

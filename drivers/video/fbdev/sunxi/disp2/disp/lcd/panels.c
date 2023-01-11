@@ -99,9 +99,7 @@ struct __lcd_panel *panel_array[] = {
 #ifdef CONFIG_LCD_SUPPORT_RT13QV005D
 	&rt13qv005d_panel,
 #endif
-#ifdef CONFIG_LCD_SUPPORT_LX50HDI4002
-	&lx50hdi4002_panel,
-#endif
+	&t050k589_panel,
 	NULL,
 };
 

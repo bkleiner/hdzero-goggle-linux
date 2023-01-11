@@ -16,6 +16,7 @@
 #include <linux/clk/sunxi.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/syscore_ops.h>
 #include "clk-sunxi.h"
 #include "clk-factors.h"
 #include "clk-periph.h"
@@ -379,15 +380,15 @@ struct factor_init_data sunxi_factos[] = {
 	{"pll_cpu",     hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE, PLL_CPU,     PLL_CPU,     LOCKBIT(28), PLL_CPU,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_cpu,     &get_factors_pll_cpu,     &calc_rate_pll_cpu,    (struct clk_ops *)NULL},
 	{"pll_ddr0",    hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE, PLL_DDR0,    PLL_DDR0,    LOCKBIT(28), PLL_DDR0,    29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_ddr0,    &get_factors_pll_ddr0,    &calc_rate_pll_ddr,    (struct clk_ops *)NULL},
 	{"pll_ddr1",    hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE, PLL_DDR1,    PLL_DDR1,    LOCKBIT(28), PLL_DDR1,    29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_ddr1,    &get_factors_pll_ddr1,    &calc_rate_pll_ddr,    (struct clk_ops *)NULL},
-	{"pll_periph0", hosc_parents, 1,          CLK_NO_DISABLE,         PLL_PERIPH0, PLL_PERIPH0, LOCKBIT(28), PLL_PERIPH0, 29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_periph0, &get_factors_pll_periph0, &calc_rate_pll_periph, (struct clk_ops *)NULL},
-	{"pll_periph1", hosc_parents, 1,          CLK_NO_DISABLE,         PLL_PERIPH1, PLL_PERIPH1, LOCKBIT(28), PLL_PERIPH1, 29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_periph1, &get_factors_pll_periph1, &calc_rate_pll_periph, (struct clk_ops *)NULL},
-	{"pll_video0",  hosc_parents, 1,          CLK_NO_DISABLE,         PLL_VIDEO0,  PLL_VIDEO0,  LOCKBIT(28), PLL_VIDEO0,  29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_video0,  &get_factors_pll_video0,  &calc_rate_video,      (struct clk_ops *)NULL},
-	{"pll_ve",      hosc_parents, 1,          CLK_NO_DISABLE,         PLL_VE,      PLL_VE,      LOCKBIT(28), PLL_VE,      29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_ve,      &get_factors_pll_ve,      &calc_rate_media,      (struct clk_ops *)NULL},
-	{"pll_de",      hosc_parents, 1,          CLK_NO_DISABLE,         PLL_DE,      PLL_DE,      LOCKBIT(28), PLL_DE,      29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_de,      &get_factors_pll_de,      &calc_rate_media,      (struct clk_ops *)NULL},
-	{"pll_isp",     hosc_parents, 1,          CLK_NO_DISABLE,         PLL_ISP,     PLL_ISP,     LOCKBIT(28), PLL_ISP,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_isp,     &get_factors_pll_isp,     &calc_rate_media,      (struct clk_ops *)NULL},
-	{"pll_audio",   hosc_parents, 1,          CLK_NO_DISABLE,         PLL_AUDIO,   PLL_AUDIO,   LOCKBIT(28), PLL_AUDIO,   29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_audio,   &get_factors_pll_audio,   &calc_rate_audio,      (struct clk_ops *)NULL},
-	{"pll_ise",     hosc_parents, 1,          CLK_NO_DISABLE,         PLL_ISE,     PLL_ISE,     LOCKBIT(28), PLL_ISE,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_ise,     &get_factors_pll_ise,     &calc_rate_media,      (struct clk_ops *)NULL},
-	{"pll_csi",     hosc_parents, 1,          CLK_NO_DISABLE,         PLL_CSI,     PLL_CSI,     LOCKBIT(28), PLL_CSI,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_csi,     &get_factors_pll_csi,     &calc_rate_media,       (struct clk_ops *)NULL},
+	{"pll_periph0", hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_PERIPH0, PLL_PERIPH0, LOCKBIT(28), PLL_PERIPH0, 29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_periph0, &get_factors_pll_periph0, &calc_rate_pll_periph, (struct clk_ops *)NULL},
+	{"pll_periph1", hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_PERIPH1, PLL_PERIPH1, LOCKBIT(28), PLL_PERIPH1, 29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_periph1, &get_factors_pll_periph1, &calc_rate_pll_periph, (struct clk_ops *)NULL},
+	{"pll_video0",  hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_VIDEO0,  PLL_VIDEO0,  LOCKBIT(28), PLL_VIDEO0,  29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_video0,  &get_factors_pll_video0,  &calc_rate_video,      (struct clk_ops *)NULL},
+	{"pll_ve",      hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_VE,      PLL_VE,      LOCKBIT(28), PLL_VE,      29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_ve,      &get_factors_pll_ve,      &calc_rate_media,      (struct clk_ops *)NULL},
+	{"pll_de",      hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_DE,      PLL_DE,      LOCKBIT(28), PLL_DE,      29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_de,      &get_factors_pll_de,      &calc_rate_media,      (struct clk_ops *)NULL},
+	{"pll_isp",     hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_ISP,     PLL_ISP,     LOCKBIT(28), PLL_ISP,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_isp,     &get_factors_pll_isp,     &calc_rate_media,      (struct clk_ops *)NULL},
+	{"pll_audio",   hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_AUDIO,   PLL_AUDIO,   LOCKBIT(28), PLL_AUDIO,   29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_audio,   &get_factors_pll_audio,   &calc_rate_audio,      (struct clk_ops *)NULL},
+	{"pll_ise",     hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_ISE,     PLL_ISE,     LOCKBIT(28), PLL_ISE,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_ise,     &get_factors_pll_ise,     &calc_rate_media,      (struct clk_ops *)NULL},
+	{"pll_csi",     hosc_parents, 1,          CLK_GET_RATE_NOCACHE|CLK_NO_DISABLE,         PLL_CSI,     PLL_CSI,     LOCKBIT(28), PLL_CSI,     29,          PLL_LOCK_NEW_MODE, &sunxi_clk_factor_pll_csi,     &get_factors_pll_csi,     &calc_rate_media,       (struct clk_ops *)NULL},
 };
 
 static const char *cpu_parents[] = {"hosc", "losc", "iosc", "pll_cpu"};
@@ -720,6 +721,38 @@ struct periph_init_data *sunxi_cpus_clk_get_periph_by_name(const char *name)
 
 	return NULL;
 }
+#ifdef CONFIG_PM_SLEEP
+static int sunxi_clk_suspend(void)
+{
+	struct sunxi_factor_clk_reg_cache *factor_clk_reg;
+	struct sunxi_periph_clk_reg_cache *periph_clk_reg;
+
+	list_for_each_entry(factor_clk_reg, &clk_factor_reg_cache_list, node)
+		sunxi_factor_clk_save(factor_clk_reg);
+
+	list_for_each_entry(periph_clk_reg, &clk_periph_reg_cache_list, node)
+		sunxi_periph_clk_save(periph_clk_reg);
+
+	return 0;
+}
+
+static void sunxi_clk_resume(void)
+{
+	struct sunxi_factor_clk_reg_cache *factor_clk_reg;
+	struct sunxi_periph_clk_reg_cache *periph_clk_reg;
+
+	list_for_each_entry(factor_clk_reg, &clk_factor_reg_cache_list, node)
+		sunxi_factor_clk_restore(factor_clk_reg);
+
+	list_for_each_entry(periph_clk_reg, &clk_periph_reg_cache_list, node)
+		sunxi_periph_clk_restore(periph_clk_reg);
+}
+
+static struct syscore_ops sunxi_clk_syscore_ops = {
+	.suspend = sunxi_clk_suspend,
+	.resume = sunxi_clk_resume,
+};
+#endif
 
 void __init sunxi_clocks_init(struct device_node *node)
 {
@@ -728,4 +761,7 @@ void __init sunxi_clocks_init(struct device_node *node)
 	sunxi_clk_periph_losc_out.gate.bus = of_iomap(node, 2);
 	/*do some initialize arguments here*/
 	sunxi_clk_factor_initlimits();
+#ifdef CONFIG_PM_SLEEP
+	register_syscore_ops(&sunxi_clk_syscore_ops);
+#endif
 }

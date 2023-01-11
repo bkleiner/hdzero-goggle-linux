@@ -156,9 +156,3 @@ config LCD_SUPPORT_RT13QV005D
 	default n
 	---help---
 		If you want to support rt13qv005d panel for display driver, select it.
-
-config LCD_SUPPORT_LX50HDI4002
-	bool "LCD support LX50HDI4002  panel"
-	default n
-	---help---
-		If you want to support LX50HDI4002 panel for display driver, select it.

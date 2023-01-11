@@ -535,6 +535,7 @@ static struct regval_list sensor_12bit_60fps_regs[] = {
 	{0x3000, 0x00}, /*operation*/
 	{0x3002, 0x00},
 };
+#if 0
 static struct regval/*ist sensor_10bit_90fps_regs[] = {
 	/*All Pixel - 23/*Mbps - 27MHz*/
 	{0x3000, 0x00},
@@ -644,6 +645,7 @@ static struct regval/*ist sensor_10bit_90fps_regs[] = {
 	{0x3000, 0x00}, /*operation           */
 	{0x3002, 0x00},
 };
+#endif
 /*
  * Here we'll try to encapsulate the changes for just the output
  * video format.
@@ -1028,6 +1030,7 @@ static struct sensor_win_size sensor_win_sizes[] = {
 	 .pclk = 74 * 1000 * 1000,
 	 .mipi_bps = 891 * 1000 * 1000,
 	 .fps_fixed = 30,
+	 .wdr_mode   = ISP_COMANDING_MODE,
 	 .bin_factor = 1,
 	 .intg_min = 8<<4,
 	 .intg_max = (2250 - 4) << 4,

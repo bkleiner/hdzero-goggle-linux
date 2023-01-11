@@ -140,6 +140,7 @@ static uint8_t axp2101_regaddrs[] = {
 	[AXP210X_REG_IIN_LIM]     = 0x16,
 	[AXP210X_REG_ICC_CFG]     = 0x62,
 	[AXP210X_CHGLED_CFG]      = 0x69,
+	[AXP210X_COMM_STAT0]      = 0x00,
 	/* [AXP210X_REG_IRQ] = 0x20, */
 	/* [AXP210X_REG_IRQMASK] = 0x21, */
 };
@@ -1411,6 +1412,66 @@ static void battery_set_full(int *rs)
 	l_time = ktime_get();
 }
 
+static void battery_chk_online_v1(struct work_struct *work)
+{
+	int ret;
+	uint8_t data[2] = {0};
+	ktime_t s_chg;
+	struct axp210x_device_info *di =
+		container_of(work, typeof(*di), bat_chk.work);
+
+	/*
+	 * check_full of batt, because bug of axp2101b, full flag can generate
+	 * in batt plugged out
+	 */
+	ret = di->read(di->regaddrs[AXP210X_COMM_STAT1], data, 1);
+	if (ret < 0) {
+		pr_info("read AXP210X_REG_VBAT error\n");
+		goto err_read;
+	}
+	/* chg_stat is full with bit[2:0] is b100 */
+	if ((data[0] & 0x07) == 0x04) {
+		battery_set_full(&di->stat.bat_full);
+	} else {
+		WRITE_ONCE(di->stat.bat_full, false);
+	}
+
+	ret = di->read(di->regaddrs[AXP210X_COMM_STAT0], data, 1);
+	if (ret < 0) {
+		pr_info("read AXP210X_COMM_STAT0 error\n");
+		goto err_read;
+	}
+
+	if ((!(data[0] & BIT(3))) && (di->stat.bat_stat != 0)) {
+		pr_debug("bat_stat change to none\n");
+		di->stat.bat_stat = 0;
+		WRITE_ONCE(di->stat.bat_read, false);
+		axp210x_reset_gauge();
+		s_chg = ktime_get();
+		axp_regmap_update(di->regmap,
+				  axp2101_regaddrs[AXP210X_CHGLED_CFG],
+				  0, BIT(0));
+		power_supply_changed(di->bat);
+	}
+	if ((data[0] & BIT(3)) && (di->stat.bat_stat != 1)) {
+		pr_debug("bat_stat change to exist\n");
+		di->stat.bat_stat = 1;
+		axp210x_reset_gauge();
+		s_chg = ktime_get();
+		axp_regmap_update(di->regmap,
+				  axp2101_regaddrs[AXP210X_CHGLED_CFG],
+				  1, BIT(0));
+		power_supply_changed(di->bat);
+	}
+
+	if (di->stat.bat_stat &&
+	    ktime_ms_delta(ktime_get(), s_chg) > MSEC_PER_SEC) {
+		WRITE_ONCE(di->stat.bat_read, true);
+	}
+
+err_read:
+	schedule_delayed_work(&di->bat_chk, msecs_to_jiffies(500));
+}
 static void battery_chk_online(struct work_struct *work)
 {
 	int ret;
@@ -1557,6 +1618,7 @@ static int axp2101_charger_probe(struct platform_device *pdev)
 	di->regaddrs = axp2101_regaddrs;
 	di->data = axp2101_model_data;
 	di->regmap = axp_dev->regmap;
+	di->version = axp_dev->axp_sub;
 
 	axp_set_charger_info(di);
 	/* for device tree parse */
@@ -1598,7 +1660,13 @@ static int axp2101_charger_probe(struct platform_device *pdev)
 	}
 #endif
 	platform_set_drvdata(pdev, di);
-	INIT_DELAYED_WORK(&di->bat_chk, battery_chk_online);
+
+	if (di->version == 1) {
+		INIT_DELAYED_WORK(&di->bat_chk, battery_chk_online_v1);
+	} else {
+		INIT_DELAYED_WORK(&di->bat_chk, battery_chk_online);
+	}
+
 	schedule_delayed_work(&di->bat_chk, msecs_to_jiffies(500));
 #if (AXP2101_DEBUG)
 	ret = class_register(&axp210x_user_define);
