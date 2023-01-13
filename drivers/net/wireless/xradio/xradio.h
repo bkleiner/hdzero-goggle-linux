@@ -1,8 +1,8 @@
 /*
  * Common define of private data for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -19,25 +19,16 @@
 #include <linux/atomic.h>
 #include <net/mac80211.h>
 
-/*Macroses for Driver parameters.*/
+//Macroses for Driver parameters.
 #define XRWL_MAX_QUEUE_SZ    (128)
 #define AC_QUEUE_NUM           4
 
-#ifdef P2P_MULTIVIF
-#define XRWL_MAX_VIFS        (3)
-#else
 #define XRWL_MAX_VIFS        (2)
-#endif
 #define XRWL_GENERIC_IF_ID   (2)
-/* (XRWL_MAX_QUEUE_SZ/(XRWL_MAX_VIFS-1))*0.9 */
-#define XRWL_HOST_VIF0_11N_THROTTLE   (58)
-/* (XRWL_MAX_QUEUE_SZ/(XRWL_MAX_VIFS-1))*0.9 */
-#define XRWL_HOST_VIF1_11N_THROTTLE   (58)
-/* XRWL_HOST_VIF0_11N_THROTTLE*0.6 = 35 */
-#define XRWL_HOST_VIF0_11BG_THROTTLE  (35)
-/* XRWL_HOST_VIF0_11N_THROTTLE*0.6 = 35 */
-#define XRWL_HOST_VIF1_11BG_THROTTLE  (35)
-
+#define XRWL_HOST_VIF0_11N_THROTTLE   (58)  //(XRWL_MAX_QUEUE_SZ/(XRWL_MAX_VIFS-1))*0.9
+#define XRWL_HOST_VIF1_11N_THROTTLE   (58)  //(XRWL_MAX_QUEUE_SZ/(XRWL_MAX_VIFS-1))*0.9
+#define XRWL_HOST_VIF0_11BG_THROTTLE  (35)  //XRWL_HOST_VIF0_11N_THROTTLE*0.6 = 35
+#define XRWL_HOST_VIF1_11BG_THROTTLE  (35)  //XRWL_HOST_VIF0_11N_THROTTLE*0.6 = 35
 #if 0
 #define XRWL_FW_VIF0_THROTTLE         (15)
 #define XRWL_FW_VIF1_THROTTLE         (15)
@@ -47,20 +38,13 @@
 #define IEEE80211_QOS_DATAGRP   0x0080
 #define WSM_KEY_MAX_IDX         20
 
-#include "common.h"
 #include "queue.h"
 #include "wsm.h"
 #include "scan.h"
-#include "txrx.h"
+#include "tx.h"
 #include "ht.h"
 #include "pm.h"
 #include "fwio.h"
-#ifdef CONFIG_XRADIO_TESTMODE
-#include "nl80211_testmode_msg_copy.h"
-#endif /*CONFIG_XRADIO_TESTMODE*/
-#ifdef CONFIG_XRADIO_ETF
-#include "etf.h"
-#endif
 
 /* #define ROC_DEBUG */
 /* hidden ssid is only supported when separate probe resp IE
@@ -99,29 +83,17 @@
 
 #define IEEE80211_FCTL_WEP      0x4000
 #define IEEE80211_QOS_DATAGRP   0x0080
-#ifdef CONFIG_XRADIO_TESTMODE
-#define XRADIO_SCAN_MEASUREMENT_PASSIVE (0)
-#define XRADIO_SCAN_MEASUREMENT_ACTIVE  (1)
-#endif
 
 #ifdef MCAST_FWDING
 #define WSM_MAX_BUF		30
 #endif
 
-#define MAX_RATES_STAGE   8
+#define MAX_RATES_STAGE   8   //
 #define MAX_RATES_RETRY   15
 
-#define XRADIO_PLAT_DEVICE   "xradio_device"
 #define XRADIO_WORKQUEUE   "xradio_wq"
-#define XRADIO_SPARE_WORKQUEUE   "xradio_spare_wq"
-#define WIFI_CONF_PATH    "/tmp/xr_wifi.conf"
+#define WIFI_CONF_PATH    "/data/xr_wifi.conf"
 
-extern char *drv_version;
-extern char *drv_buildtime;
-#define DRV_VERSION    drv_version
-#define DRV_BUILDTIME  drv_buildtime
-
-/* extern */ struct sbus_ops;
 /* extern */ struct task_struct;
 /* extern */ struct xradio_debug_priv;
 /* extern */ struct xradio_debug_common;
@@ -164,64 +136,17 @@ struct xradio_link_entry {
 	struct sk_buff_head		rx_queue;
 };
 
-#if defined(ROAM_OFFLOAD) || defined(CONFIG_XRADIO_TESTMODE)
+#if defined(ROAM_OFFLOAD)
 struct xradio_testframe {
 	u8 len;
 	u8 *data;
 };
 #endif
-#ifdef CONFIG_XRADIO_TESTMODE
-struct advance_scan_elems {
-	u8 scanMode;
-	u16 duration;
-};
-/**
- * xradio_tsm_info - Keeps information about ongoing TSM collection
- * @ac: Access category for which metrics to be collected
- * @use_rx_roaming: Use received voice packets to compute roam delay
- * @sta_associated: Set to 1 after association
- * @sta_roamed: Set to 1 after successful roaming
- * @roam_delay: Roam delay
- * @rx_timestamp_vo: Timestamp of received voice packet
- * @txconf_timestamp_vo: Timestamp of received tx confirmation for
- * successfully transmitted VO packet
- * @sum_pkt_q_delay: Sum of packet queue delay
- * @sum_media_delay: Sum of media delay
- *
- */
-struct xradio_tsm_info {
-	u8 ac;
-	u8 use_rx_roaming;
-	u8 sta_associated;
-	u8 sta_roamed;
-	u16 roam_delay;
-	u32 rx_timestamp_vo;
-	u32 txconf_timestamp_vo;
-	u32 sum_pkt_q_delay;
-	u32 sum_media_delay;
-};
-
-/**
- * xradio_start_stop_tsm - To start or stop collecting TSM metrics in
- * xradio driver
- * @start: To start or stop collecting TSM metrics
- * @up: up for which metrics to be collected
- * @packetization_delay: Packetization delay for this TID
- *
- */
-struct xradio_start_stop_tsm {
-	u8 start;       /*1: To start, 0: To stop*/
-	u8 up;
-	u16 packetization_delay;
-};
-
-#endif /* CONFIG_XRADIO_TESTMODE */
 struct xradio_common {
 	struct xradio_debug_common	*debug;
 	struct xradio_queue		tx_queue[AC_QUEUE_NUM];
 	struct xradio_queue_stats	tx_queue_stats;
 
-	struct platform_device  *plat_device;
 	struct ieee80211_hw		*hw;
 	struct mac_address		addresses[XRWL_MAX_VIFS];
 
@@ -233,15 +158,9 @@ struct xradio_common {
 	struct device			*pdev;
 	struct workqueue_struct		*workqueue;
 
-	struct semaphore		conf_lock;
+	struct mutex			conf_mutex;
 
-	/* some works can not push into a same workqueue, so create a
-	 * spare workqueue to separate them.
-	 */
-	struct workqueue_struct 	*spare_workqueue;
-
-	const struct sbus_ops		*sbus_ops;
-	struct sbus_priv		*sbus_priv;
+	struct sdio_func		*sdio_func;
 	int 			driver_ready;
 
 	/* HW/FW type (HIF_...) */
@@ -259,11 +178,7 @@ struct xradio_common {
 	/* calibration, output power limit and rssi<->dBm conversation data */
 
 	/* BBP/MAC state */
-#ifdef USE_VFS_FIRMWARE
-	const struct xr_file		*sdd;
-#else
 	const struct firmware		*sdd;
-#endif
 	struct ieee80211_rate		*rates;
 	struct ieee80211_rate		*mcs_rates;
 	u8 mac_addr[ETH_ALEN];
@@ -271,7 +186,7 @@ struct xradio_common {
 	struct ieee80211_channel	*channel;
 	int				channel_switch_in_progress;
 	wait_queue_head_t		channel_switch_done;
-	u8				channel_changed;
+	u8        channel_changed;   //add by yangfh 2015-5-15 16:57:38.
 	u8				long_frame_max_tx_count;
 	u8				short_frame_max_tx_count;
 	/* TODO:COMBO: According to Hong aggregation will happen per VIFF.
@@ -287,26 +202,18 @@ struct xradio_common {
 	spinlock_t			ba_lock; /*TODO: Same as above */
 	bool				ba_ena; /*TODO: Same as above */
 	struct work_struct              ba_work; /*TODO: Same as above */
-#ifdef CONFIG_PM
 	struct xradio_pm_state		pm_state;
-#endif
 	bool				is_BT_Present;
 	bool				is_go_thru_go_neg;
 	u8				conf_listen_interval;
 
 	/* BH */
-	atomic_t			bh_rx;
 	atomic_t			bh_tx;
 	atomic_t			bh_term;
 	atomic_t			bh_suspend;
 	struct task_struct		*bh_thread;
 	int				bh_error;
-#ifdef BH_USE_SEMAPHORE
-	struct semaphore		bh_sem;
-	atomic_t			    bh_wk;
-#else
 	wait_queue_head_t		bh_wq;
-#endif
 	wait_queue_head_t		bh_evt_wq;
 
 
@@ -323,48 +230,30 @@ struct xradio_common {
 	bool				device_can_sleep;
 	/* Keep xradio awake (WUP = 1) 1 second after each scan to avoid
 	 * FW issue with sleeping/waking up. */
-	atomic_t            recent_scan;
+	atomic_t			recent_scan;
+	long			connet_time[XRWL_MAX_VIFS];
+#ifdef CONFIG_XRADIO_SUSPEND_POWER_OFF
 	atomic_t            suspend_state;
-	wait_queue_head_t		wsm_wakeup_done;
-#ifdef HW_RESTART
-	bool                exit_sync;
-	int			hw_restart_work_running;
-	bool                hw_restart;
-	struct work_struct  hw_restart_work;
 #endif
 
 	/* WSM */
 	struct wsm_caps			wsm_caps;
-	struct semaphore                wsm_cmd_sema;
+	struct mutex			wsm_cmd_mux;
 	struct wsm_buf			wsm_cmd_buf;
 	struct wsm_cmd			wsm_cmd;
 	wait_queue_head_t		wsm_cmd_wq;
 	wait_queue_head_t		wsm_startup_done;
-	struct wsm_cbc			wsm_cbc;
 	struct semaphore		tx_lock_sem;
-	atomic_t			tx_lock;
-	struct semaphore		dtor_lock;
+	atomic_t				tx_lock;
 	u32				pending_frame_id;
-#ifdef CONFIG_XRADIO_TESTMODE
-	/* Device Power Range */
-	struct wsm_tx_power_range       txPowerRange[2];
-	/* Advance Scan */
-	struct advance_scan_elems	advanceScanElems;
-	bool				enable_advance_scan;
-	struct delayed_work		advance_scan_timeout;
-#endif /* CONFIG_XRADIO_TESTMODE */
 
 	/* WSM debug */
-	int                 wsm_enable_wsm_dumps;
-	u32                 wsm_dump_max_size;
 	u32                 query_packetID;
 	atomic_t            query_cnt;
 	struct work_struct  query_work; /* for query packet */
 
 	/* Scan status */
 	struct xradio_scan scan;
-	int scan_delay_status[XRWL_MAX_VIFS];
-	unsigned long scan_delay_time[XRWL_MAX_VIFS];
 
 	/* TX/RX */
 	unsigned long		rx_timestamp;
@@ -387,7 +276,7 @@ struct xradio_common {
 	/* statistics */
 	struct ieee80211_low_level_stats stats;
 
-	struct xradio_ht_info		ht_info;
+	struct xradio_ht_oper		ht_oper;
 	int				tx_burst_idx;
 
 	struct ieee80211_iface_limit		if_limits1[2];
@@ -395,7 +284,7 @@ struct xradio_common {
 	struct ieee80211_iface_limit		if_limits3[2];
 	struct ieee80211_iface_combination	if_combs[3];
 
-	struct semaphore		wsm_oper_lock;
+	struct mutex			wsm_oper_lock;
 	struct delayed_work		rem_chan_timeout;
 	atomic_t			remain_on_channel;
 	int				roc_if_id;
@@ -407,9 +296,9 @@ struct xradio_common {
 	u32				key_map;
 	struct wsm_add_key		keys[WSM_KEY_MAX_INDEX + 1];
 #ifdef MCAST_FWDING
-	struct wsm_buf		wsm_release_buf;
+	struct wsm_buf		wsm_release_buf[WSM_MAX_BUF];
 	u8			buf_released;
-#endif
+#endif	
 #ifdef ROAM_OFFLOAD
 	u8				auto_scanning;
 	u8				frame_rcvd;
@@ -421,21 +310,10 @@ struct xradio_common {
 	struct sk_buff 			*beacon_bkp;
 	struct xradio_testframe 	testframe;
 #endif /*ROAM_OFFLOAD*/
-#ifdef CONFIG_XRADIO_TESTMODE
-	struct xradio_testframe test_frame;
-	struct xr_tsm_stats		tsm_stats;
-	struct xradio_tsm_info		tsm_info;
-	spinlock_t			tsm_lock;
-	struct xradio_start_stop_tsm	start_stop_tsm;
-#endif /* CONFIG_XRADIO_TESTMODE */
+
 	u8          connected_sta_cnt;
 	u16			vif0_throttle;
 	u16			vif1_throttle;
-#ifdef	MONITOR_MODE
-	int			monitor_if_id;
-	bool			monitor_running;
-#endif
-	u8          join_chan;
 };
 
 /* Virtual Interface State. One copy per VIF */
@@ -480,14 +358,9 @@ struct xradio_vif {
 	struct wsm_broadcast_addr_filter	broadcast_filter;
 	bool				disable_beacon_filter;
 	struct wsm_arp_ipv4_filter      filter4;
-#ifdef IPV6_FILTERING
-	struct wsm_ndp_ipv6_filter 	filter6;
-#endif /*IPV6_FILTERING*/
 	struct work_struct		update_filtering_work;
 	struct work_struct		set_beacon_wakeup_period_work;
-#ifdef CONFIG_PM
 	struct xradio_pm_state_vif	pm_state_vif;
-#endif
 	/*TODO: Add support in mac80211 for psmode info per VIF */
 	struct wsm_p2p_ps_modeinfo	p2p_ps_modeinfo;
 	struct wsm_uapsd_info		uapsd_info;
@@ -509,8 +382,8 @@ struct xradio_vif {
 	/* Security */
 	s8			wep_default_key_id;
 	struct work_struct	wep_key_work;
-	unsigned long           rx_timestamp;
-	u32                     cipherType;
+        unsigned long           rx_timestamp;
+        u32                     cipherType;
 
 
 	/* AP powersave */
@@ -529,7 +402,7 @@ struct xradio_vif {
 	spinlock_t		ps_state_lock;
 	bool			buffered_multicasts;
 	bool			tx_multicast;
-	u8     last_tim[8];  /*for softap dtim*/
+	u8     last_tim[8];   //for softap dtim, add by yangfh
 	struct work_struct	set_tim_work;
 	struct delayed_work	set_cts_work;
 	struct work_struct	multicast_start_work;
@@ -557,27 +430,15 @@ struct xradio_vif {
 	u8			action_frame_sa[ETH_ALEN];
 	u8			action_linkid;
 #endif
-	/* Some optimizations for tx rate build.*/
-	u32          base_rates;
-	u32          oper_rates;
-
 	bool			htcap;
-#ifdef AP_HT_CAP_UPDATE
-	u16                     ht_info;
-	struct work_struct      ht_info_update_work;
+#ifdef  AP_HT_CAP_UPDATE
+        u16                     ht_oper;
+        struct work_struct      ht_oper_update_work;
 #endif
 
 #ifdef AP_HT_COMPAT_FIX
 	u16    ht_compat_cnt;
 	u16    ht_compat_det;
-#endif
-
-#ifdef AP_ARP_COMPAT_FIX
-	/* Driver sends arp request  pkt suscessly, it also means that
-	* driver receives tx confirm,then the variable is counted;
-	* if driver receives a arp respone pkt,then the variable is cleared.
-	*/
-	u16    arp_compat_cnt;
 #endif
 };
 struct xradio_sta_priv {
@@ -586,27 +447,15 @@ struct xradio_sta_priv {
 };
 enum xradio_data_filterid {
 	IPV4ADDR_FILTER_ID = 0,
-#ifdef IPV6_FILTERING
-	IPV6ADDR_FILTER_ID,
-#endif /*IPV6_FILTERING*/
 };
-
-#ifdef IPV6_FILTERING
-/* IPV6 host addr info */
-struct ipv6_addr_info {
-	u8 filter_mode;
-	u8 address_mode;
-	u16 ipv6[8];
-};
-#endif /*IPV6_FILTERING*/
 
 /* Datastructure for LLC-SNAP HDR */
 #define P80211_OUI_LEN  3
 struct ieee80211_snap_hdr {
-	u8    dsap;   /* always 0xAA */
-	u8    ssap;   /* always 0xAA */
-	u8    ctrl;   /* always 0x03 */
-	u8    oui[P80211_OUI_LEN];    /* organizational universal id */
+        u8    dsap;   /* always 0xAA */
+        u8    ssap;   /* always 0xAA */
+        u8    ctrl;   /* always 0x03 */
+        u8    oui[P80211_OUI_LEN];    /* organizational universal id */
 } __packed;
 
 
@@ -622,7 +471,7 @@ extern u32  TES_P2P_0002_state;
 #define TES_P2P_0002_STATE_GET_PKTID  0x02
 #endif
 
-/* debug.h must be here because refer to struct xradio_vif and
+/* debug.h must be here because refer to struct xradio_vif and 
    struct xradio_common.*/
 #include "debug.h"
 
@@ -646,7 +495,7 @@ struct xradio_vif *xrwl_hwpriv_to_vifpriv(struct xradio_common *hw_priv,
 {
 	struct xradio_vif *vif;
 
-	if (SYS_WARN((-1 == if_id) || (if_id > XRWL_MAX_VIFS)))
+	if (WARN_ON((-1 == if_id) || (if_id > XRWL_MAX_VIFS)))
 		return NULL;
 	/* TODO:COMBO: During scanning frames can be received
 	 * on interface ID 3 */
@@ -657,11 +506,9 @@ struct xradio_vif *xrwl_hwpriv_to_vifpriv(struct xradio_common *hw_priv,
 	}
 
 	vif = xrwl_get_vif_from_ieee80211(hw_priv->vif_list[if_id]);
-	SYS_WARN(!vif);
-	if (vif && atomic_read(&vif->enabled))
+	WARN_ON(!vif);
+	if (vif)
 		spin_lock(&vif->vif_lock);
-	else
-		vif = NULL;
 	spin_unlock(&hw_priv->vif_list_lock);
 	return vif;
 }
@@ -670,7 +517,7 @@ static inline
 struct xradio_vif *__xrwl_hwpriv_to_vifpriv(struct xradio_common *hw_priv,
 					      int if_id)
 {
-	SYS_WARN((-1 == if_id) || (if_id > XRWL_MAX_VIFS));
+	WARN_ON((-1 == if_id) || (if_id > XRWL_MAX_VIFS));
 	/* TODO:COMBO: During scanning frames can be received
 	 * on interface ID 3 */
 	if (!hw_priv->vif_list[if_id]) {
@@ -693,20 +540,20 @@ static inline bool is_hardware_xradio(struct xradio_common *hw_priv)
 
 static inline int xrwl_get_nr_hw_ifaces(struct xradio_common *hw_priv)
 {
-	switch (hw_priv->hw_revision) {
-	case XR819_HW_REV0:
-	default:
-		return 1;
+	switch(hw_priv->hw_revision) {
+		case XR819_HW_REV0:
+		default:
+			return 1;
 	}
 }
 
-#define xradio_for_each_vif(_hw_priv, _priv, _i) \
-	for ( \
-		_i = 0; \
-		(_i < XRWL_MAX_VIFS)  \
-		&& ((_priv = _hw_priv->vif_list[_i] ? \
-		xrwl_get_vif_from_ieee80211(_hw_priv->vif_list[_i]) : NULL), 1); \
-		_i++ \
+#define xradio_for_each_vif(_hw_priv, _priv, _i)			\
+	for(		\
+		_i = 0; 							 \
+		(_i < XRWL_MAX_VIFS)				  \
+		&& ((_priv = _hw_priv->vif_list[_i] ?			 \
+		xrwl_get_vif_from_ieee80211(_hw_priv->vif_list[_i]) : NULL),1);	 \
+		_i++		 \
 	)
 
 /*******************************************************

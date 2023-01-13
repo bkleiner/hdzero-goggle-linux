@@ -1,8 +1,8 @@
 /*
  * Queue implementation for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -13,9 +13,6 @@
 #include <linux/sched.h>
 #include "xradio.h"
 #include "queue.h"
-#ifdef CONFIG_XRADIO_TESTMODE
-#include <linux/time.h>
-#endif /*CONFIG_XRADIO_TESTMODE*/
 
 /* private */ struct xradio_queue_item
 {
@@ -24,10 +21,6 @@
 	u32			packetID;
 	unsigned long		queue_timestamp;
 	unsigned long		xmit_timestamp;
-#ifdef CONFIG_XRADIO_TESTMODE
-	unsigned long		mdelay_timestamp;
-	unsigned long		qdelay_timestamp;
-#endif /*CONFIG_XRADIO_TESTMODE*/
 	struct xradio_txpriv	txpriv;
 	u8			generation;
 	u8			pack_stk_wr;
@@ -39,18 +32,18 @@ static inline void __xradio_queue_lock(struct xradio_queue *queue)
 	if (queue->tx_locked_cnt++ == 0) {
 		txrx_printk(XRADIO_DBG_MSG, "[TX] Queue %d is locked.\n",
 				queue->queue_id);
-		mac80211_stop_queue(stats->hw_priv->hw, queue->queue_id);
+		ieee80211_stop_queue(stats->hw_priv->hw, queue->queue_id);
 	}
 }
 
 static inline void __xradio_queue_unlock(struct xradio_queue *queue)
 {
 	struct xradio_queue_stats *stats = queue->stats;
-	SYS_BUG(!queue->tx_locked_cnt);
+	BUG_ON(!queue->tx_locked_cnt);
 	if (--queue->tx_locked_cnt == 0) {
 		txrx_printk(XRADIO_DBG_MSG, "[TX] Queue %d is unlocked.\n",
 				queue->queue_id);
-		mac80211_wake_queue(stats->hw_priv->hw, queue->queue_id);
+		ieee80211_wake_queue(stats->hw_priv->hw, queue->queue_id);
 	}
 }
 
@@ -69,8 +62,7 @@ static inline void xradio_queue_parse_id(u32 packetID, u8 *queue_generation,
 	*queue_generation	= (packetID >> 28) & 0xF;
 }
 
-static inline u32 xradio_queue_make_packet_id(u8 queue_generation,
-						u8 queue_id,
+static inline u32 xradio_queue_make_packet_id(u8 queue_generation, u8 queue_id,
 						u8 item_generation, u8 item_id,
 						u8 if_id, u8 link_id)
 {
@@ -83,39 +75,40 @@ static inline u32 xradio_queue_make_packet_id(u8 queue_generation,
 		((u32)queue_generation << 28);
 }
 
-static void xradio_queue_post_gc(struct xradio_queue_stats *stats)
+static void xradio_queue_post_gc(struct xradio_queue_stats *stats,
+				 struct list_head *gc_list)
 {
 	struct xradio_queue_item *item;
 
-	while (!list_empty(&stats->gc_list)) {
-		spin_lock_bh(&stats->lock);
+	while (!list_empty(gc_list)) {
 		item = list_first_entry(
-			&stats->gc_list, struct xradio_queue_item, head);
+			gc_list, struct xradio_queue_item, head);
 		list_del(&item->head);
-		spin_unlock_bh(&stats->lock);
 		stats->skb_dtor(stats->hw_priv, item->skb, &item->txpriv);
 		kfree(item);
 	}
 }
 
-static void xradio_queue_register_post_gc(struct xradio_queue_stats *stats,
+static void xradio_queue_register_post_gc(struct list_head *gc_list,
 				     struct xradio_queue_item *item)
 {
 	struct xradio_queue_item *gc_item;
-	gc_item = xr_kmalloc(sizeof(struct xradio_queue_item), false);
-	SYS_BUG(!gc_item);
-	memcpy(gc_item, item, sizeof(struct xradio_queue_item));
-	spin_lock_bh(&stats->lock);
-	list_add_tail(&gc_item->head, &stats->gc_list);
-	spin_unlock_bh(&stats->lock);
+	
+	/* MRK C90 */
+	gc_item = kmemdup(item, sizeof(struct xradio_queue_item), GFP_ATOMIC);
+	/* gc_item = kmalloc(sizeof(struct xradio_queue_item), GFP_KERNEL);	MRK C90 */
+	BUG_ON(!gc_item);
+	/* memcpy(gc_item, item, sizeof(struct xradio_queue_item));		MRK C90 */
+	list_add_tail(&gc_item->head, gc_list);
 }
 
 static void __xradio_queue_gc(struct xradio_queue *queue,
+			      struct list_head *head,
 			      bool unlock)
 {
 	struct xradio_queue_stats *stats = queue->stats;
 	struct xradio_queue_item *item = NULL;
-	/* struct xradio_vif *priv; */
+	//struct xradio_vif *priv;
 	int if_id;
 	bool wakeup_stats = false;
 
@@ -136,20 +129,20 @@ static void __xradio_queue_gc(struct xradio_queue *queue,
 		if (!--stats->link_map_cache[if_id][txpriv->link_id])
 			wakeup_stats = true;
 		spin_unlock_bh(&stats->lock);
-		/*
-		priv = xrwl_hwpriv_to_vifpriv(stats->hw_priv, if_id);
-		if (priv) {
-			xradio_debug_tx_ttl(priv);
-			spin_unlock(&priv->vif_lock);
-		} */
-		xradio_queue_register_post_gc(stats, item);
+		//priv = xrwl_hwpriv_to_vifpriv(stats->hw_priv, if_id);
+		//if (priv) {
+		//	xradio_debug_tx_ttl(priv);
+		//	spin_unlock(&priv->vif_lock);
+		//}
+		xradio_queue_register_post_gc(head, item);
 		item->skb = NULL;
 		list_move_tail(&item->head, &queue->free_pool);
 	}
 
 	if (wakeup_stats)
 		wake_up(&stats->wait_link_id_empty);
-
+	
+	//modified by yangfh for test WFD
 	if (queue->overfull) {
 		if (queue->num_queued <= ((stats->hw_priv->vif0_throttle +
 						stats->hw_priv->vif1_throttle+2)>>1)) {
@@ -160,32 +153,22 @@ static void __xradio_queue_gc(struct xradio_queue *queue,
 		} else if (item) {
 			unsigned long tmo = item->queue_timestamp + queue->ttl;
 			mod_timer(&queue->gc, tmo);
-#ifdef CONFIG_PM
 			xradio_pm_stay_awake(&stats->hw_priv->pm_state,
 					tmo - jiffies);
-#endif
 		}
 	}
 }
 
 static void xradio_queue_gc(unsigned long arg)
 {
-	struct xradio_queue *queue =
-		(struct xradio_queue *)arg;
+	struct xradio_queue *queue = (struct xradio_queue *)arg;
+
+	LIST_HEAD(list);
 
 	spin_lock_bh(&queue->lock);
-	__xradio_queue_gc(queue, true);
+	__xradio_queue_gc(queue, &list, true);
 	spin_unlock_bh(&queue->lock);
-	if (!list_empty(&queue->stats->gc_list))
-		queue_work(queue->stats->hw_priv->workqueue, &queue->stats->gc_work);
-}
-
-void xradio_queue_gc_work(struct work_struct *work)
-{
-	struct xradio_queue_stats *stats =
-		container_of(work, struct xradio_queue_stats, gc_work);
-
-	xradio_queue_post_gc(stats);
+	xradio_queue_post_gc(queue->stats, &list);
 }
 
 int xradio_queue_stats_init(struct xradio_queue_stats *stats,
@@ -201,12 +184,11 @@ int xradio_queue_stats_init(struct xradio_queue_stats *stats,
 	stats->hw_priv = hw_priv;
 	spin_lock_init(&stats->lock);
 	init_waitqueue_head(&stats->wait_link_id_empty);
-	INIT_WORK(&stats->gc_work, xradio_queue_gc_work);
-	INIT_LIST_HEAD(&stats->gc_list);
 	for (i = 0; i < XRWL_MAX_VIFS; i++) {
-		stats->link_map_cache[i] = xr_kzalloc(sizeof(int[map_capacity]), false);
+		/* MRK C90 */
+		stats->link_map_cache[i] = kzalloc(sizeof(int) * map_capacity, GFP_KERNEL);
 		if (!stats->link_map_cache[i]) {
-			for (i--; i >= 0; i--)
+			for (; i >= 0; i--)
 				kfree(stats->link_map_cache[i]);
 			return -ENOMEM;
 		}
@@ -236,16 +218,16 @@ int xradio_queue_init(struct xradio_queue *queue,
 	queue->gc.data = (unsigned long)queue;
 	queue->gc.function = xradio_queue_gc;
 
-	queue->pool = xr_kzalloc(sizeof(struct xradio_queue_item) * capacity,
-					false);
+	queue->pool = kzalloc(sizeof(struct xradio_queue_item) * capacity,
+	                         GFP_KERNEL);
 	if (!queue->pool)
 		return -ENOMEM;
-
+	/* MRK C90 */
 	for (i = 0; i < XRWL_MAX_VIFS; i++) {
 		queue->link_map_cache[i] =
-				xr_kzalloc(sizeof(int[stats->map_capacity]), false);
+				kzalloc(sizeof(int) * stats->map_capacity, GFP_KERNEL);
 		if (!queue->link_map_cache[i]) {
-			for (i--; i >= 0; i--)
+			for (; i >= 0; i--)
 				kfree(queue->link_map_cache[i]);
 			kfree(queue->pool);
 			queue->pool = NULL;
@@ -264,6 +246,7 @@ int xradio_queue_clear(struct xradio_queue *queue, int if_id)
 {
 	int i, cnt, iter;
 	struct xradio_queue_stats *stats = queue->stats;
+	LIST_HEAD(gc_list);
 
 	cnt = 0;
 	spin_lock_bh(&queue->lock);
@@ -273,9 +256,9 @@ int xradio_queue_clear(struct xradio_queue *queue, int if_id)
 	while (!list_empty(&queue->pending)) {
 		struct xradio_queue_item *item = list_first_entry(
 			&queue->pending, struct xradio_queue_item, head);
-		SYS_WARN(!item->skb);
+		WARN_ON(!item->skb);
 		if (XRWL_ALL_IFS == if_id || item->txpriv.if_id == if_id) {
-			xradio_queue_register_post_gc(stats, item);
+			xradio_queue_register_post_gc(&gc_list, item);
 			item->skb = NULL;
 			list_move_tail(&item->head, &queue->free_pool);
 			cnt++;
@@ -319,8 +302,7 @@ int xradio_queue_clear(struct xradio_queue *queue, int if_id)
 	}
 	spin_unlock_bh(&queue->lock);
 	wake_up(&stats->wait_link_id_empty);
-	if (!list_empty(&stats->gc_list))
-		xradio_queue_post_gc(stats);
+	xradio_queue_post_gc(stats, &gc_list);
 	return 0;
 }
 
@@ -378,13 +360,10 @@ size_t xradio_queue_get_num_queued(struct xradio_vif *priv,
 }
 
 int xradio_queue_put(struct xradio_queue *queue, struct sk_buff *skb,
-		     struct xradio_txpriv *txpriv)
+                     struct xradio_txpriv *txpriv)
 {
 	int ret = 0;
-#ifdef CONFIG_XRADIO_TESTMODE
-	struct timeval tmval;
-#endif /*CONFIG_XRADIO_TESTMODE*/
-	LIST_HEAD(gc_list);
+	/* MRK 5.3 - removed LIST_HEAD(gc_list); */
 	struct xradio_queue_stats *stats = queue->stats;
 	/* TODO:COMBO: Add interface ID info to queue item */
 
@@ -392,10 +371,10 @@ int xradio_queue_put(struct xradio_queue *queue, struct sk_buff *skb,
 		return -EINVAL;
 
 	spin_lock_bh(&queue->lock);
-	if (!SYS_WARN(list_empty(&queue->free_pool))) {
+	if (!WARN_ON(list_empty(&queue->free_pool))) {
 		struct xradio_queue_item *item = list_first_entry(
 			&queue->free_pool, struct xradio_queue_item, head);
-		SYS_BUG(item->skb);
+		BUG_ON(item->skb);
 
 		list_move_tail(&item->head, &queue->queue);
 		item->skb = skb;
@@ -407,10 +386,6 @@ int xradio_queue_put(struct xradio_queue *queue, struct sk_buff *skb,
 			item->generation, item - queue->pool,
 			txpriv->if_id, txpriv->raw_link_id);
 		item->queue_timestamp = jiffies;
-#ifdef CONFIG_XRADIO_TESTMODE
-		do_gettimeofday(&tmval);
-		item->qdelay_timestamp = tmval.tv_usec;
-#endif /*CONFIG_XRADIO_TESTMODE*/
 
 #ifdef TES_P2P_0002_ROC_RESTART
 		if (TES_P2P_0002_state == TES_P2P_0002_STATE_SEND_RESP) {
@@ -435,12 +410,12 @@ int xradio_queue_put(struct xradio_queue *queue, struct sk_buff *skb,
 		 */
 		if (queue->overfull == false &&
 				queue->num_queued >=
-		((stats->hw_priv->vif0_throttle + stats->hw_priv->vif1_throttle)
+		((stats->hw_priv->vif0_throttle +stats->hw_priv->vif1_throttle)
 				- (num_present_cpus() - 1))) {
 			queue->overfull = true;
 			__xradio_queue_lock(queue);
 			mod_timer(&queue->gc, jiffies);
-			txrx_printk(XRADIO_DBG_NIY, "!lock queue\n");
+			txrx_printk(XRADIO_DBG_NIY,"!lock queue\n");
 		}
 	} else {
 		ret = -ENOENT;
@@ -468,9 +443,6 @@ int xradio_queue_get(struct xradio_queue *queue,
 	struct xradio_queue_item *item;
 	struct xradio_queue_stats *stats = queue->stats;
 	bool wakeup_stats = false;
-#ifdef CONFIG_XRADIO_TESTMODE
-	struct timeval tmval;
-#endif /*CONFIG_XRADIO_TESTMODE*/
 
 	spin_lock_bh(&queue->lock);
 	list_for_each_entry(item, &queue->queue, head) {
@@ -481,7 +453,7 @@ int xradio_queue_get(struct xradio_queue *queue,
 		}
 	}
 
-	if (!SYS_WARN(ret)) {
+	if (!WARN_ON(ret)) {
 		*tx = (struct wsm_tx *)item->skb->data;
 		*tx_info = IEEE80211_SKB_CB(item->skb);
 		*txpriv = &item->txpriv;
@@ -492,10 +464,6 @@ int xradio_queue_get(struct xradio_queue *queue,
 		--queue->link_map_cache[item->txpriv.if_id]
 				[item->txpriv.link_id];
 		item->xmit_timestamp = jiffies;
-#ifdef CONFIG_XRADIO_TESTMODE
-		do_gettimeofday(&tmval);
-		item->mdelay_timestamp = tmval.tv_usec;
-#endif /*CONFIG_XRADIO_TESTMODE*/
 
 		spin_lock_bh(&stats->lock);
 		--stats->num_queued[item->txpriv.if_id];
@@ -509,8 +477,7 @@ int xradio_queue_get(struct xradio_queue *queue,
 		queue->num_queued,
 		queue->link_map_cache[item->txpriv.if_id][item->txpriv.link_id],
 		queue->num_pending);
-		txrx_printk(XRADIO_DBG_ERROR, "queue_get stats %d, %d\n",
-			    stats->num_queued,
+		txrx_printk(XRADIO_DBG_ERROR, "queue_get stats %d, %d\n", stats->num_queued,
 		stats->link_map_cache[item->txpriv.if_id]
 		[item->txpriv.link_id]);
 #endif
@@ -522,12 +489,7 @@ int xradio_queue_get(struct xradio_queue *queue,
 	return ret;
 }
 
-#ifdef CONFIG_XRADIO_TESTMODE
-int xradio_queue_requeue(struct xradio_common *hw_priv,
-	struct xradio_queue *queue, u32 packetID, bool check)
-#else
 int xradio_queue_requeue(struct xradio_queue *queue, u32 packetID, bool check)
-#endif
 {
 	int ret = 0;
 	u8 queue_generation, queue_id, item_generation, item_id, if_id, link_id;
@@ -538,37 +500,27 @@ int xradio_queue_requeue(struct xradio_queue *queue, u32 packetID, bool check)
 				&item_generation, &item_id, &if_id, &link_id);
 
 	item = &queue->pool[item_id];
-#ifdef P2P_MULTIVIF
-	if (check && item->txpriv.if_id == XRWL_GENERIC_IF_ID) {
-#else
 	if (check && item->txpriv.offchannel_if_id == XRWL_GENERIC_IF_ID) {
-#endif
 		txrx_printk(XRADIO_DBG_MSG, "Requeued frame dropped for "
 						"generic interface id.\n");
-#ifdef CONFIG_XRADIO_TESTMODE
-		xradio_queue_remove(hw_priv, queue, packetID);
-#else
 		xradio_queue_remove(queue, packetID);
-#endif
 		return 0;
 	}
 
-#ifndef P2P_MULTIVIF
 	if (!check)
 		item->txpriv.offchannel_if_id = XRWL_GENERIC_IF_ID;
-#endif
 
 	/*if_id = item->txpriv.if_id;*/
 
 	spin_lock_bh(&queue->lock);
-	SYS_BUG(queue_id != queue->queue_id);
+	BUG_ON(queue_id != queue->queue_id);
 	if (unlikely(queue_generation != queue->generation)) {
 		ret = -ENOENT;
 	} else if (unlikely(item_id >= (unsigned) queue->capacity)) {
-		SYS_WARN(1);
+		WARN_ON(1);
 		ret = -EINVAL;
 	} else if (unlikely(item->generation != item_generation)) {
-		SYS_WARN(1);
+		WARN_ON(1);
 		ret = -ENOENT;
 	} else {
 		--queue->num_pending;
@@ -629,12 +581,8 @@ int xradio_queue_requeue_all(struct xradio_queue *queue)
 
 	return 0;
 }
-#ifdef CONFIG_XRADIO_TESTMODE
-int xradio_queue_remove(struct xradio_common *hw_priv,
-				struct xradio_queue *queue, u32 packetID)
-#else
+
 int xradio_queue_remove(struct xradio_queue *queue, u32 packetID)
-#endif /*CONFIG_XRADIO_TESTMODE*/
 {
 	int ret = 0;
 	u8 queue_generation, queue_id, item_generation, item_id, if_id, link_id;
@@ -649,15 +597,15 @@ int xradio_queue_remove(struct xradio_queue *queue, u32 packetID)
 	item = &queue->pool[item_id];
 
 	spin_lock_bh(&queue->lock);
-	SYS_BUG(queue_id != queue->queue_id);
+	BUG_ON(queue_id != queue->queue_id);
 	/*TODO:COMBO:Add check for interface ID also */
 	if (unlikely(queue_generation != queue->generation)) {
 		ret = -ENOENT;
 	} else if (unlikely(item_id >= (unsigned) queue->capacity)) {
-		SYS_WARN(1);
+		WARN_ON(1);
 		ret = -EINVAL;
 	} else if (unlikely(item->generation != item_generation)) {
-		SYS_WARN(1);
+		WARN_ON(1);
 		ret = -ENOENT;
 	} else {
 		gc_txpriv = item->txpriv;
@@ -669,51 +617,13 @@ int xradio_queue_remove(struct xradio_queue *queue, u32 packetID)
 		--queue->num_queued_vif[if_id];
 		++queue->num_sent;
 		++item->generation;
-#ifdef CONFIG_XRADIO_TESTMODE
-		spin_lock_bh(&hw_priv->tsm_lock);
-		if (hw_priv->start_stop_tsm.start) {
-			if (queue_id == hw_priv->tsm_info.ac) {
-				struct timeval tmval;
-				unsigned long queue_delay;
-				unsigned long media_delay;
-				do_gettimeofday(&tmval);
-
-				if (tmval.tv_usec > item->qdelay_timestamp)
-					queue_delay = tmval.tv_usec -
-						item->qdelay_timestamp;
-				else
-					queue_delay = tmval.tv_usec +
-					1000000 - item->qdelay_timestamp;
-
-				if (tmval.tv_usec > item->mdelay_timestamp)
-					media_delay = tmval.tv_usec -
-						item->mdelay_timestamp;
-				else
-					media_delay = tmval.tv_usec +
-					1000000 - item->mdelay_timestamp;
-				hw_priv->tsm_info.sum_media_delay +=
-							media_delay;
-				hw_priv->tsm_info.sum_pkt_q_delay += queue_delay;
-				if (queue_delay <= 10000)
-					hw_priv->tsm_stats.bin0++;
-				else if (queue_delay <= 20000)
-					hw_priv->tsm_stats.bin1++;
-				else if (queue_delay <= 40000)
-					hw_priv->tsm_stats.bin2++;
-				else
-					hw_priv->tsm_stats.bin3++;
-			}
-		}
-		spin_unlock_bh(&hw_priv->tsm_lock);
-#endif /*CONFIG_XRADIO_TESTMODE*/
 		/* Do not use list_move_tail here, but list_move:
 		 * try to utilize cache row.
 		 */
 		list_move(&item->head, &queue->free_pool);
 
 		if (unlikely(queue->overfull) &&
-		    (queue->num_queued <= ((stats->hw_priv->vif0_throttle +
-		     stats->hw_priv->vif1_throttle + 2)>>1))) {
+		    (queue->num_queued <= ((stats->hw_priv->vif0_throttle + stats->hw_priv->vif1_throttle + 2)>>1))) {
 			queue->overfull = false;
 			__xradio_queue_unlock(queue);
 		}
@@ -724,8 +634,8 @@ int xradio_queue_remove(struct xradio_queue *queue, u32 packetID)
 	txrx_printk(XRADIO_DBG_ERROR, "queue_drop queue %d, %d, %d\n",
 		queue->num_queued, queue->link_map_cache[if_id][0],
 		queue->num_pending);
-	txrx_printk(XRADIO_DBG_ERROR, "queue_drop stats %d, %d\n",
-		    stats->num_queued, stats->link_map_cache[if_id][0]);
+	txrx_printk(XRADIO_DBG_ERROR, "queue_drop stats %d, %d\n", stats->num_queued,
+		stats->link_map_cache[if_id][0]);
 #endif
 	if (gc_skb)
 		stats->skb_dtor(stats->hw_priv, gc_skb, &gc_txpriv);
@@ -747,18 +657,15 @@ int xradio_queue_get_skb(struct xradio_queue *queue, u32 packetID,
 	item = &queue->pool[item_id];
 
 	spin_lock_bh(&queue->lock);
-	SYS_BUG(queue_id != queue->queue_id);
+	BUG_ON(queue_id != queue->queue_id);
 	/* TODO:COMBO: Add check for interface ID here */
 	if (unlikely(queue_generation != queue->generation)) {
-		txrx_printk(XRADIO_DBG_WARN, "%s, queue generation match failed!\n",
-				__func__);
 		ret = -ENOENT;
 	} else if (unlikely(item_id >= (unsigned) queue->capacity)) {
-		txrx_printk(XRADIO_DBG_WARN, "%s, invalid item_id!\n", __func__);
+		WARN_ON(1);
 		ret = -EINVAL;
 	} else if (unlikely(item->generation != item_generation)) {
-		txrx_printk(XRADIO_DBG_WARN, "%s, item generation match failed!\n",
-				__func__);
+		WARN_ON(1);
 		ret = -ENOENT;
 	} else {
 		*skb = item->skb;
@@ -836,7 +743,7 @@ bool xradio_queue_stats_is_empty(struct xradio_queue_stats *stats,
 }
 
 bool xradio_query_txpkt_timeout(struct xradio_common *hw_priv, int if_id,
-				u32 pending_pkt_id, long *timeout)
+                                u32 pending_pkt_id, long *timeout)
 {
 	int i;
 	bool pending = false;
@@ -863,9 +770,9 @@ bool xradio_query_txpkt_timeout(struct xradio_common *hw_priv, int if_id,
 						old_queue   = queue;
 						old_item    = item;
 					}
-					pending = true;
 				}
 			}
+			pending = true;
 		}
 		spin_unlock_bh(&queue->lock);
 	}
@@ -901,20 +808,18 @@ bool xradio_query_txpkt_timeout(struct xradio_common *hw_priv, int if_id,
 		spin_unlock_bh(&old_queue->lock);
 		/* Dump Info of stuck frames. */
 		if (frame) {
-			txrx_printk(XRADIO_DBG_ERROR, "TX confirm timeout(%ds).\n",
-				    WSM_CMD_LAST_CHANCE_TIMEOUT/HZ);
+			txrx_printk(XRADIO_DBG_ERROR, "TX confirm timeout(%ds).\n", 
+			            WSM_CMD_LAST_CHANCE_TIMEOUT/HZ);
 			txrx_printk(XRADIO_DBG_ERROR, "if=%d, linkid=%d, tid=%d, " \
-				    "old_packetID=0x%08x, fctl=0x%04x, len=%d, wr=%d\n",
-				    if_id, link_id, tid,
-				    hw_priv->query_packetID, fctl, len,
-				    pack_stk_wr);
+			            "old_packetID=0x%08x, fctl=0x%04x, len=%d, wr=%d\n", 
+			            if_id, link_id, tid,  hw_priv->query_packetID, fctl, len, 
+			            pack_stk_wr);
 		}
 		/* Return half of timeout for query packet. */
 		*timeout = (WSM_CMD_LAST_CHANCE_TIMEOUT>>1);
-	} else if (unlikely(pack_stk_wr)) {
+	} else if (unlikely(pack_stk_wr)){
 		*timeout = *timeout + (WSM_CMD_LAST_CHANCE_TIMEOUT>>1);
-		txrx_printk(XRADIO_DBG_MSG, "%s, wr and timeout=%ld\n",
-			    __func__, *timeout);
+		txrx_printk(XRADIO_DBG_MSG,"%s, wr and timeout=%ld\n", __func__, *timeout);
 	}
 	return pending;
 }

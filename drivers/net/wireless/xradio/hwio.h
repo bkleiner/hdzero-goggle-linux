@@ -1,8 +1,8 @@
 /*
  * hardware interfaces for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -63,7 +63,7 @@ struct download_cntl_t {
 	(DOWNLOAD_CTRL_OFFSET + offsetof(struct download_cntl_t, Status))
 #define DOWNLOAD_DEBUG_DATA_REG		\
 	(DOWNLOAD_CTRL_OFFSET + offsetof(struct download_cntl_t, DebugData))
-
+	
 #define DOWNLOAD_DEBUG_DATA_LEN   (108)
 #define DOWNLOAD_BLOCK_SIZE       (1024)
 
@@ -149,24 +149,18 @@ struct download_cntl_t {
 /* For XRADIO the IRQ Enable and Ready Bits are in CONFIG register */
 #define HIF_CONF_IRQ_RDY_ENABLE	(BIT(16)|BIT(17))
 
-int xradio_data_read(struct xradio_common *hw_priv, void *buf,
-					 size_t buf_len);
-int xradio_data_write(struct xradio_common *hw_priv, const void *buf,
-					  size_t buf_len);
-int xradio_reg_read(struct xradio_common *hw_priv, u16 addr, void *buf,
-					size_t buf_len);
-int xradio_reg_write(struct xradio_common *hw_priv, u16 addr,
-					 const void *buf, size_t buf_len);
-int xradio_indirect_read(struct xradio_common *hw_priv, u32 addr, void *buf,
-						 size_t buf_len, u32 prefetch, u16 port_addr);
-int xradio_apb_write(struct xradio_common *hw_priv, u32 addr,
-					 const void *buf, size_t buf_len);
-int xradio_ahb_write(struct xradio_common *hw_priv, u32 addr,
-					 const void *buf, size_t buf_len);
+int xradio_data_read(struct xradio_common *hw_priv, void *buf, size_t buf_len);
+int xradio_data_write(struct xradio_common *hw_priv, const void *buf, size_t buf_len);
+int xradio_reg_read(struct xradio_common *hw_priv, u16 addr, void *buf, size_t buf_len);
+int xradio_reg_write(struct xradio_common *hw_priv, u16 addr, const void *buf, size_t buf_len);
+int xradio_indirect_read(struct xradio_common *hw_priv, u32 addr, void *buf, 
+                         size_t buf_len, u32 prefetch, u16 port_addr);
+int xradio_apb_write(struct xradio_common *hw_priv, u32 addr, const void *buf, size_t buf_len);
+int xradio_ahb_write(struct xradio_common *hw_priv, u32 addr, const void *buf, size_t buf_len);
 
 
 static inline int xradio_reg_read_16(struct xradio_common *hw_priv,
-				     u16 addr, u16 *val)
+                                     u16 addr, u16 *val)
 {
 	int ret    = 0;
 	u32 bigVal = 0;
@@ -176,60 +170,58 @@ static inline int xradio_reg_read_16(struct xradio_common *hw_priv,
 }
 
 static inline int xradio_reg_write_16(struct xradio_common *hw_priv,
-				      u16 addr, u16 val)
+                                      u16 addr, u16 val)
 {
 	u32 bigVal = (u32)val;
 	return xradio_reg_write(hw_priv, addr, &bigVal, sizeof(bigVal));
 }
 
 static inline int xradio_reg_read_32(struct xradio_common *hw_priv,
-				      u16 addr, u32 *val)
+                                      u16 addr, u32 *val)
 {
-	return xradio_reg_read(hw_priv, addr, val, sizeof(*val));
+	return xradio_reg_read(hw_priv, addr, val, sizeof(val));
 }
 
 static inline int xradio_reg_write_32(struct xradio_common *hw_priv,
-				      u16 addr, u32 val)
+                                      u16 addr, u32 val)
 {
 	return xradio_reg_write(hw_priv, addr, &val, sizeof(val));
 }
 
 static inline int xradio_apb_read(struct xradio_common *hw_priv, u32 addr,
-				  void *buf, size_t buf_len)
+                                  void *buf, size_t buf_len)
 {
-	return xradio_indirect_read(hw_priv, addr, buf, buf_len,
-				    HIF_CONFIG_PFETCH_BIT,
-				    HIF_SRAM_DPORT_REG_ID);
+	return xradio_indirect_read(hw_priv, addr, buf, buf_len, HIF_CONFIG_PFETCH_BIT, 
+	                            HIF_SRAM_DPORT_REG_ID);
 }
 
 static inline int xradio_ahb_read(struct xradio_common *hw_priv, u32 addr,
-				  void *buf, size_t buf_len)
+                                  void *buf, size_t buf_len)
 {
-	return xradio_indirect_read(hw_priv, addr, buf, buf_len,
-				    HIF_CONFIG_AHB_PFETCH_BIT,
-				    HIF_AHB_DPORT_REG_ID);
+	return xradio_indirect_read(hw_priv, addr, buf, buf_len, HIF_CONFIG_AHB_PFETCH_BIT, 
+	                            HIF_AHB_DPORT_REG_ID);
 }
 
 static inline int xradio_apb_read_32(struct xradio_common *hw_priv,
-				      u32 addr, u32 *val)
+                                      u32 addr, u32 *val)
 {
-	return xradio_apb_read(hw_priv, addr, val, sizeof(*val));
+	return xradio_apb_read(hw_priv, addr, val, sizeof(val));
 }
 
 static inline int xradio_apb_write_32(struct xradio_common *hw_priv,
-				      u32 addr, u32 val)
+                                      u32 addr, u32 val)
 {
 	return xradio_apb_write(hw_priv, addr, &val, sizeof(val));
 }
 
 static inline int xradio_ahb_read_32(struct xradio_common *hw_priv,
-				      u32 addr, u32 *val)
+                                      u32 addr, u32 *val)
 {
-	return xradio_ahb_read(hw_priv, addr, val, sizeof(*val));
+	return xradio_ahb_read(hw_priv, addr, val, sizeof(val));
 }
 
 static inline int xradio_ahb_write_32(struct xradio_common *hw_priv,
-				      u32 addr, u32 val)
+                                      u32 addr, u32 val)
 {
 	return xradio_ahb_write(hw_priv, addr, &val, sizeof(val));
 }

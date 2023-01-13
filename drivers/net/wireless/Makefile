@@ -35,6 +35,5 @@ obj-$(CONFIG_USB_NET_RNDIS_WLAN)	+= rndis_wlan.o
 obj-$(CONFIG_MAC80211_HWSIM)	+= mac80211_hwsim.o
 
 obj-$(CONFIG_BCMDHD)	+= bcmdhd/
-obj-$(CONFIG_XR_WLAN)   += xradio/
-obj-$(CONFIG_XR819_WLAN)   += xr819/
-obj-$(CONFIG_XR829_WLAN)   += xr829/
+
+obj-$(CONFIG_WLAN_VENDOR_XRADIO)   += xradio/
