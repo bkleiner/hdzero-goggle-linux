@@ -1,8 +1,8 @@
 /*
  * Firmware APIs for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -12,21 +12,12 @@
 #define FWIO_H_INCLUDED
 
 #define XR819_HW_REV0       (8190)
-#ifdef USE_VFS_FIRMWARE
-#define XR819_BOOTLOADER    ("/etc/firmware/boot_xr819.bin")
-#define XR819_FIRMWARE      ("/etc/firmware/fw_xr819.bin")
-#define XR819_SDD_FILE      ("/etc/firmware/sdd_xr819.bin")
-#else
-#define XR819_BOOTLOADER    ("boot_xr819.bin")
-#define XR819_FIRMWARE      ("fw_xr819.bin")
-#define XR819_SDD_FILE      ("sdd_xr819.bin")
-#endif
+#define XR819_BOOTLOADER    ("xr819/boot_xr819.bin")
+#define XR819_FIRMWARE      ("xr819/fw_xr819.bin")
+#define XR819_SDD_FILE      ("xr819/sdd_xr819.bin")
 
-#define SDD_PTA_CFG_ELT_ID              0xEB
-#define SDD_REFERENCE_FREQUENCY_ELT_ID  0xC5
-#define SDD_MAX_OUTPUT_POWER_2G4_ELT_ID 0xE3
-#define SDD_MAX_OUTPUT_POWER_5G_ELT_ID  0xE4
-
+#define SDD_PTA_CFG_ELT_ID             0xEB
+#define SDD_REFERENCE_FREQUENCY_ELT_ID 0xC5
 #define FIELD_OFFSET(type, field) ((u8 *)&((type *)0)->field - (u8 *)0)
 #define FIND_NEXT_ELT(e) (struct xradio_sdd *)((u8 *)&e->data + e->length)
 struct xradio_sdd {

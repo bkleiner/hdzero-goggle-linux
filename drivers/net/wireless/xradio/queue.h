@@ -1,8 +1,8 @@
 /*
  * queue operations for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,8 +25,8 @@
 /* forward */ struct xradio_queue_stats;
 
 typedef void (*xradio_queue_skb_dtor_t)(struct xradio_common *priv,
-					struct sk_buff *skb,
-					const struct xradio_txpriv *txpriv);
+                                        struct sk_buff *skb,
+                                        const struct xradio_txpriv *txpriv);
 
 struct xradio_queue {
 	struct                    xradio_queue_stats *stats;
@@ -56,8 +56,6 @@ struct xradio_queue_stats {
 	int                     num_queued[XRWL_MAX_VIFS];
 	size_t                  map_capacity;
 	wait_queue_head_t       wait_link_id_empty;
-	struct list_head        gc_list;
-	struct work_struct      gc_work;
 	xradio_queue_skb_dtor_t skb_dtor;
 	struct xradio_common   *hw_priv;
 };
@@ -69,71 +67,54 @@ struct xradio_txpriv {
 	u8 rate_id;
 	u8 offset;
 	u8 if_id;
-#ifndef P2P_MULTIVIF
 	u8 offchannel_if_id;
-#else
-	u8 raw_if_id;
-#endif
 	u8 use_bg_rate;
-#ifdef AP_ARP_COMPAT_FIX
-	u8 iv_len;
-#endif
 };
 
 int xradio_queue_stats_init(struct xradio_queue_stats *stats,
-			    size_t map_capacity,
-			    xradio_queue_skb_dtor_t skb_dtor,
-			    struct xradio_common *priv);
+                            size_t map_capacity,
+                            xradio_queue_skb_dtor_t skb_dtor,
+                            struct xradio_common *priv);
 int xradio_queue_init(struct xradio_queue *queue,
-		      struct xradio_queue_stats *stats,
-		      u8 queue_id,
-		      size_t capacity,
-		      unsigned long ttl);
+                      struct xradio_queue_stats *stats,
+                      u8 queue_id,
+                      size_t capacity,
+                      unsigned long ttl);
 int xradio_queue_clear(struct xradio_queue *queue, int if_id);
 void xradio_queue_stats_deinit(struct xradio_queue_stats *stats);
 void xradio_queue_deinit(struct xradio_queue *queue);
 
 size_t xradio_queue_get_num_queued(struct xradio_vif *priv,
-				   struct xradio_queue *queue,
-				   u32 link_id_map);
+                                   struct xradio_queue *queue,
+                                   u32 link_id_map);
 int xradio_queue_put(struct xradio_queue *queue,
-		     struct sk_buff *skb, struct xradio_txpriv *txpriv);
+                     struct sk_buff *skb, struct xradio_txpriv *txpriv);
 int xradio_queue_get(struct xradio_queue *queue,
-		     int if_id, u32 link_id_map,
-		     struct wsm_tx **tx,
-		     struct ieee80211_tx_info **tx_info,
-		     struct xradio_txpriv **txpriv);
+                     int if_id, u32 link_id_map,
+                     struct wsm_tx **tx,
+                     struct ieee80211_tx_info **tx_info,
+                     struct xradio_txpriv **txpriv);
 
-#ifdef CONFIG_XRADIO_TESTMODE
-int xradio_queue_requeue(struct xradio_common *hw_priv,
-			 struct xradio_queue *queue,
-			 u32 packetID, bool check);
-#else
 int xradio_queue_requeue(struct xradio_queue *queue, u32 packetID, bool check);
-#endif
+
 int xradio_queue_requeue_all(struct xradio_queue *queue);
-#ifdef CONFIG_XRADIO_TESTMODE
-int xradio_queue_remove(struct xradio_common *hw_priv,
-			struct xradio_queue *queue,
-			u32 packetID);
-#else
 int xradio_queue_remove(struct xradio_queue *queue,
-			u32 packetID);
-#endif /*CONFIG_XRADIO_TESTMODE*/
+                        u32 packetID);
+
 int xradio_queue_get_skb(struct xradio_queue *queue, u32 packetID,
-			 struct sk_buff **skb,
-			 const struct xradio_txpriv **txpriv);
+                         struct sk_buff **skb,
+                         const struct xradio_txpriv **txpriv);
 void xradio_queue_lock(struct xradio_queue *queue);
 void xradio_queue_unlock(struct xradio_queue *queue);
 bool xradio_queue_get_xmit_timestamp(struct xradio_queue *queue,
-				     unsigned long *timestamp, int if_id,
-				     u32 pending_frameID, u32 *Old_frame_ID);
+                                     unsigned long *timestamp, int if_id,
+                                     u32 pending_frameID, u32 *Old_frame_ID);
 bool xradio_query_txpkt_timeout(struct xradio_common *hw_priv, int if_id,
-				u32 pending_pkt_id, long *timeout);
+                                u32 pending_pkt_id, long *timeout);
 
 
 bool xradio_queue_stats_is_empty(struct xradio_queue_stats *stats,
-				 u32 link_id_map, int if_id);
+                                 u32 link_id_map, int if_id);
 
 static inline u8 xradio_queue_get_queue_id(u32 packetID)
 {

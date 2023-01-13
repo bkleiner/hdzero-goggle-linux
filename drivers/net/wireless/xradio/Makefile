@@ -1,7 +1,18 @@
-xradio_core-y := \
-	common.o \
+# SPDX-License-Identifier: GPL-2.0-only
+
+# # Standalone Makefile - uncomment for out-of-tree compilation
+# CONFIG_WLAN_VENDOR_XRADIO := m
+# ccflags-y += -DCONFIG_XRADIO_USE_EXTENSIONS
+# ccflags-y += -DCONFIG_XRADIO_WAPI_SUPPORT
+
+# Kernel part
+
+obj-$(CONFIG_WLAN_VENDOR_XRADIO) += xradio_wlan.o
+
+xradio_wlan-objs := \
 	fwio.o \
-	txrx.o \
+	tx.o \
+	rx.o \
 	main.o \
 	queue.o \
 	hwio.o \
@@ -9,67 +20,41 @@ xradio_core-y := \
 	wsm.o \
 	sta.o \
 	ap.o \
+	keys.o \
 	scan.o \
-	platform.o
+	module.o \
+	sdio.o \
+	pm.o \
+	ht.o \
+	p2p.o
 
-xradio_core-$(CONFIG_PM)            += pm.o
-xradio_core-$(CONFIG_XRADIO_SDIO)   += sdio.o
-xradio_core-$(CONFIG_XRADIO_DEBUG)  += debug.o
-xradio_core-$(CONFIG_XRADIO_ITP)    += itp.o
-xradio_core-$(CONFIG_XRADIO_ETF)    += etf.o
+# ccflags-y += -DMCAST_FWDING
+# ccflags-y += -DXRADIO_SUSPEND_RESUME_FILTER_ENABLE
+# ccflags-y += -DAP_AGGREGATE_FW_FIX
 
-#Extensions for WFD and PS mode
-ccflags-y += -DCONFIG_XRADIO_USE_EXTENSIONS
-ccflags-y += -DP2P_MULTIVIF
-ccflags-y += -DMCAST_FWDING
-ccflags-y += -DXRADIO_SUSPEND_RESUME_FILTER_ENABLE
-ccflags-y += -DAP_AGGREGATE_FW_FIX
-ccflags-y += -DAP_HT_CAP_UPDATE
-ccflags-y += -DHW_RESTART
-ccflags-y += -DHW_ERROR_WIFI_RESET
-ccflags-y += -DAP_HT_COMPAT_FIX
-#ccflags-y += -DAP_ARP_COMPAT_FIX
-ccflags-y += -DENHANCE_ANTI_INTERFERE
-ccflags-y += -DMONITOR_MODE
-#ccflags-y += -DUSE_RSSI_OFFSET
-ccflags-y += -DSCAN_FAILED_WORKAROUND_OF_FW_EXCEPTION
+# ccflags-y += -DAP_HT_CAP_UPDATE
+# ccflags-y += -DAP_HT_COMPAT_FIX
 
-# Use vfs for firmware load when request_firmware
-# can't work on other platform.
-ccflags-y += -DUSE_VFS_FIRMWARE
+# # Extra IE for probe response from upper layer is needed in P2P GO
+# # For offloading probe response to FW, the extra IE must be included
+# # in the probe response template. Required for hidden SSID.
+# ccflags-y += -DPROBE_RESP_EXTRA_IE
 
-# Extra IE for probe response from upper layer is needed in P2P GO
-# For offloading probe response to FW, the extra IE must be included
-# in the probe response template
-ccflags-y += -DPROBE_RESP_EXTRA_IE
-ccflags-y += -DIPV6_FILTERING
+# # Modified for P2P stability.
+# ccflags-y += -DTES_P2P_0002_ROC_RESTART
+# ccflags-y += -DTES_P2P_000B_EXTEND_INACTIVITY_CNT
+# ccflags-y += -DTES_P2P_000B_DISABLE_EAPOL_FILTER
 
-# Modified for P2P stability.
-ccflags-y += -DTES_P2P_0002_ROC_RESTART
-ccflags-y += -DTES_P2P_000B_EXTEND_INACTIVITY_CNT
-ccflags-y += -DTES_P2P_000B_DISABLE_EAPOL_FILTER
+# # Modified for power save.
+# ccflags-y += -DCONFIG_PM
+# ccflags-y += -DCONFIG_XRADIO_SUSPEND_POWER_OFF
+# ccflags-y += -DXRADIO_USE_LONG_DTIM_PERIOD
+# ccflags-y += -DXRADIO_USE_LONG_KEEP_ALIVE_PERIOD
 
-# Modified for power save.
-#ccflags-y += -DXRADIO_USE_LONG_DTIM_PERIOD
-ccflags-y += -DXRADIO_USE_LONG_KEEP_ALIVE_PERIOD
+# # Not functional at this point
+# #ccflags-y += -DROAM_OFFLOAD
 
-# Mac addr config, disable hex for default.
-#ccflags-y += -DXRADIO_MACPARAM_HEX
-
-# Use semaphore to sync bh txrx.
-#ccflags-y += -DBH_USE_SEMAPHORE
-
-EXTRA_CFLAGS += -Wno-error=date-time
-EXTRA_CFLAGS += -Wno-date-time
-EXTRA_CFLAGS += -Wno-error=incompatible-pointer-types
-EXTRA_CFLAGS += -Wno-incompatible-pointer-types
-EXTRA_CFLAGS += -Wno-shift-count-overflow
-EXTRA_CFLAGS += -Wno-unused-variable
+# #ccflags-y += -DDEBUG
 
 ldflags-y += --strip-debug
-
-xradio_wlan-y := wlan_init.o
-
-obj-$(CONFIG_XRADIO) += xradio_core.o
-obj-m += xradio_wlan.o
 

@@ -1,8 +1,8 @@
 /*
- * tx/rx interfaces for XRadio drivers
+ * txrx interfaces for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -44,7 +44,6 @@ struct tx_policy_cache {
 	struct list_head used;
 	struct list_head free;
 	spinlock_t lock;
-	bool   queue_locked;
 };
 
 /* ******************************************************************** */
@@ -58,11 +57,17 @@ void tx_policy_init(struct xradio_common *hw_priv);
 void tx_policy_upload_work(struct work_struct *work);
 
 /* ******************************************************************** */
+/* RX implementation							*/
+
+void xradio_check_go_neg_conf_success(struct xradio_common *hw_priv,
+						u8 *action);
+
+/* ******************************************************************** */
 /* TX implementation							*/
 
 u32 xradio_rate_mask_to_wsm(struct xradio_common *hw_priv,
 			       u32 rates);
-void xradio_tx(struct ieee80211_hw *dev, struct sk_buff *skb);
+void xradio_tx(struct ieee80211_hw *dev, struct ieee80211_tx_control *control, struct sk_buff *skb);
 void xradio_skb_dtor(struct xradio_common *hw_priv,
 		     struct sk_buff *skb,
 		     const struct xradio_txpriv *txpriv);
@@ -72,21 +77,11 @@ void xradio_skb_dtor(struct xradio_common *hw_priv,
 
 void xradio_tx_confirm_cb(struct xradio_common *hw_priv,
 			  struct wsm_tx_confirm *arg);
-void xradio_rx_cb(struct xradio_vif *priv,
-		  struct wsm_rx *arg,
-		  struct sk_buff **skb_p);
 
 /* ******************************************************************** */
 /* Timeout								*/
 
 void xradio_tx_timeout(struct work_struct *work);
-
-/* ******************************************************************** */
-/* Security								*/
-int xradio_alloc_key(struct xradio_common *hw_priv);
-void xradio_free_key(struct xradio_common *hw_priv, int idx);
-void xradio_free_keys(struct xradio_common *hw_priv);
-int xradio_upload_keys(struct xradio_vif *priv);
 
 /* ******************************************************************** */
 /* Workaround for WFD test case 6.1.10					*/

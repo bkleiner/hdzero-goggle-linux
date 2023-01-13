@@ -1,8 +1,8 @@
 /*
  * Data Transmission thread for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -16,6 +16,8 @@
 
 /* extern */ struct xradio_common;
 
+#define SDIO_BLOCK_SIZE (528)
+
 int xradio_register_bh(struct xradio_common *hw_priv);
 void xradio_unregister_bh(struct xradio_common *hw_priv);
 void xradio_irq_handler(struct xradio_common *hw_priv);
@@ -26,7 +28,7 @@ int xradio_bh_resume(struct xradio_common *hw_priv);
 void xradio_enable_powersave(struct xradio_vif *priv, bool enable);
 int wsm_release_tx_buffer(struct xradio_common *hw_priv, int count);
 int wsm_release_vif_tx_buffer(struct xradio_common *hw_priv, int if_id,
-			      int count);
+                              int count);
 int xradio_init_resv_skb(struct xradio_common *hw_priv);
 void xradio_deinit_resv_skb(struct xradio_common *hw_priv);
 int xradio_realloc_resv_skb(struct xradio_common *hw_priv,

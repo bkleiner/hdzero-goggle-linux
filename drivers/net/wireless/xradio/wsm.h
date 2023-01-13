@@ -1,8 +1,8 @@
 /*
  * wsm interfaces for XRadio drivers
  *
- * Copyright (c) 2013
- * Xradio Technology Co., Ltd. <www.xradiotech.com>
+ * Copyright (c) 2013, XRadio
+ * Author: XRadio
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -30,12 +30,13 @@ struct xradio_common;
 /* 2   Mbps            ERP-DSSS */
 #define WSM_TRANSMIT_RATE_2		(1)
 
-/* 5.5 Mbps            ERP-CCK, ERP-PBCC (Not supported) */
-/* #define WSM_TRANSMIT_RATE_5		(2) */
+/* 5.5 Mbps            ERP-CCK (ERP-PBCC not supported) */
+#define WSM_TRANSMIT_RATE_5		(2)
 
-/* 11  Mbps            ERP-CCK, ERP-PBCC (Not supported) */
-/* #define WSM_TRANSMIT_RATE_11		(3) */
+/* 11  Mbps            ERP-CCK (ERP-PBCC not supported) */
+#define WSM_TRANSMIT_RATE_11		(3)
 
+/* Firmware will raise an exception and halt if mode 4 or 5 are used */ 
 /* 22  Mbps            ERP-PBCC (Not supported) */
 /* #define WSM_TRANSMIT_RATE_22		(4) */
 
@@ -127,11 +128,6 @@ struct xradio_common;
 
 /* The maximum number of SSIDs that the device can scan for. */
 #define WSM_SCAN_MAX_NUM_OF_SSIDS	(2)
-#ifdef CONFIG_XRADIO_TESTMODE
-/* Transmit flags */
-/* Start Expiry time from the receipt of tx request */
-#define WSM_TX_FLAG_EXPIRY_TIME		(BIT(0))
-#endif /*CONFIG_XRADIO_TESTMODE*/
 
 /* Power management modes */
 /* 802.11 Active mode */
@@ -287,7 +283,7 @@ struct xradio_common;
 #define WSM_RX_STATUS_GROUP_KEY		(BIT(19))
 
 /* Macro to fetch encryption key index. */
-#define WSM_RX_STATUS_KEY_IDX(status)	(((status) >> 20) & 0x0F)
+#define WSM_RX_STATUS_KEY_IDX(status)	(((status >> 20)) & 0x0F)
 
 /* Frame Control field starts at Frame offset + 2 */
 #define WSM_TX_2BYTES_SHIFT		(BIT(7))
@@ -343,7 +339,6 @@ struct xradio_common;
 #define WSM_START_MODE_AP		(0)	/* Mini AP */
 #define WSM_START_MODE_P2P_GO		(1)	/* P2P GO */
 #define WSM_START_MODE_P2P_DEV		(2)	/* P2P device */
-#define WSM_START_MODE_MONITOR		(3)	/* Monitor */
 
 /* SetAssociationMode MIB flags */
 #define WSM_ASSOCIATION_MODE_USE_PREAMBLE_TYPE		(BIT(0))
@@ -421,16 +416,16 @@ struct xradio_common;
 /* Huanglu add for firmware debug control */
 #define WSM_MIB_ID_FW_DEBUG_CONTROL		0x0008
 
-/* for read/write registers from firmware*/
+/* yangfh add for read/write registers from firmware*/
 #define WSM_MIB_ID_RW_FW_REG		0x0009
 
-/* for Set max number of mpdus in a-mpdu*/
+/* yangfh add for Set max number of mpdus in a-mpdu*/
 #define WSM_MIB_ID_SET_AMPDU_NUM		0x000a
 
-/* for tx-ampdu-len-adaption */
+/* Huanglu add for tx-ampdu-len-adaption */
 #define WSM_MIB_ID_SET_TALA_PARA		0x000b
 
-/* for set TPA param */
+/* yangfh add for set TPA param */
 #define WSM_MIB_ID_SET_TPA_PARAM		0x000c
 
 /* 4.9  NonErpProtection */
@@ -474,16 +469,16 @@ struct xradio_common;
 #define WSM_MIB_ID_BACKOFF_DBG		0x1038
 #define WSM_MIB_ID_BACKOFF_CTRL		0x1039
 
-/*requery packet status*/
+//add yangfh for requery packet status
 #define WSM_MIB_ID_REQ_PKT_STATUS	0x1040
 
-/*TPA debug informations*/
+//add yangfh for TPA debug informations
 #define WSM_MIB_ID_TPA_DEBUG_INFO	0x1041
 
-/*tx power informations*/
+//add yangfh for tx power informations
 #define WSM_MIB_ID_TX_POWER_INFO	0x1042
 
-/*some hardware information*/
+//add yangfh for some hardware information
 #define WSM_MIB_ID_HW_INFO	        0x1043
 
 /* 4.21 BlockAckPolicy */
@@ -575,14 +570,6 @@ struct xradio_common;
 #define WSM_MIB_ID_FORWARDING_OFFLOAD		0x1033
 #endif
 
-#ifdef IPV6_FILTERING
-/* IpV6 Addr Filter */
-/* 4.52 Neighbor solicitation IPv6 address table */
-#define WSM_MIB_IP_IPV6_ADDR_FILTER		0x1032
-#define WSM_MIB_ID_NS_IP_ADDRESSES_TABLE	0x1034
-#define WSM_MAX_NDP_IP_ADDRTABLE_ENTRIES	1
-#endif /*IPV6_FILTERING*/
-
 /* Frame template types */
 #define WSM_FRAME_TYPE_PROBE_REQUEST	(0)
 #define WSM_FRAME_TYPE_BEACON		(1)
@@ -591,10 +578,6 @@ struct xradio_common;
 #define WSM_FRAME_TYPE_PS_POLL		(4)
 #define WSM_FRAME_TYPE_PROBE_RESPONSE	(5)
 #define WSM_FRAME_TYPE_ARP_REPLY        (6)
-
-#ifdef IPV6_FILTERING
-#define WSM_FRAME_TYPE_NA               (7)
-#endif /*IPV6_FILTERING*/
 
 #define WSM_FRAME_GREENFIELD		(0x80)	/* See 4.11 */
 
@@ -695,21 +678,8 @@ struct wsm_caps {
 	u16 firmwareBuildNumber;
 	u16 firmwareVersion;
 	char fw_label[WSM_FW_LABEL+2];
-	u32 firmwareConfig[4];
 	int firmwareReady;
 };
-static inline u32 wsm_version(u32 ver, u32 build)
-{
-	return (u32)((ver<<16) | build);
-}
-#define GET_WSM_VERSION(wsm) wsm_version(wsm.firmwareVersion, wsm.firmwareBuildNumber)
-#define WSM_VERSION_BF(wsm, v, b) (GET_WSM_VERSION(wsm) < wsm_version(v, b))
-#define WSM_VERSION_AF(wsm, v, b) (GET_WSM_VERSION(wsm) > wsm_version(v, b))
-#define WSM_VERSION_EQ(wsm, v, b) (GET_WSM_VERSION(wsm) == wsm_version(v, b))
-
-#define WSM_CAPS_2_4_GHZ(wsm)      (wsm.firmwareCap & (1<<0))
-#define WSM_CAPS_5_0_GHZ(wsm)      (wsm.firmwareCap & (1<<1))
-#define WSM_CAPS_11N_TO_11BG(wsm)  (wsm.firmwareCap & (1<<5))
 
 /* ******************************************************************** */
 /* WSM commands								*/
@@ -745,7 +715,8 @@ struct wsm_reset {
 
 int wsm_reset(struct xradio_common *hw_priv, const struct wsm_reset *arg,
 	      int if_id);
-void wsm_upper_restart(struct xradio_common *hw_priv);
+
+//add by yangfh
 void wsm_query_work(struct work_struct *work);
 
 /* 3.5 */
@@ -783,9 +754,6 @@ struct wsm_scan_complete {
 	u16 reserved;
 #endif /*ROAM_OFFLOAD*/
 };
-
-typedef void (*wsm_scan_complete_cb) (struct xradio_common *hw_priv,
-				      struct wsm_scan_complete *arg);
 
 /* 3.9 */
 struct wsm_scan {
@@ -856,8 +824,8 @@ struct wsm_tx_confirm {
 
 	/* WSM_TX_STATUS_... */
 	/* [out] */ u16 flags;
-
-	/*rate feed back*/
+	
+	//rate feed back, add by yangfh
 	/* [out] */ u32 rate_try[3];
 
 	/* The total time in microseconds that the frame spent in */
@@ -874,8 +842,6 @@ struct wsm_tx_confirm {
 };
 
 /* 3.15 */
-typedef void (*wsm_tx_confirm_cb) (struct xradio_common *hw_priv,
-				   struct wsm_tx_confirm *arg);
 
 /* Note that ideology of wsm_tx struct is different against the rest of
  * WSM API. wsm_hdr is /not/ a caller-adapted struct to be used as an input
@@ -958,12 +924,6 @@ struct wsm_rx {
 
 /* = sizeof(generic hi hdr) + sizeof(wsm hdr) */
 #define WSM_RX_EXTRA_HEADROOM (16)
-#ifdef USE_RSSI_OFFSET
-#define WSM_RSSI_OFFSET  (-5)
-#endif
-
-typedef void (*wsm_rx_cb) (struct xradio_vif *priv, struct wsm_rx *arg,
-			   struct sk_buff **skb_p);
 
 /* 3.17 */
 struct wsm_event {
@@ -986,8 +946,6 @@ struct xradio_wsm_event {
 /* 3.18 - 3.22 */
 /* Measurement. Skipped for now. Irrelevent. */
 
-typedef void (*wsm_event_cb) (struct xradio_common *hw_priv,
-			      struct wsm_event *arg);
 
 /* 3.23 */
 struct wsm_join {
@@ -1067,9 +1025,6 @@ int wsm_set_pm(struct xradio_common *hw_priv, const struct wsm_set_pm *arg,
 struct wsm_set_pm_complete {
 	u8 psm;			/* WSM_PSM_... */
 };
-
-typedef void (*wsm_set_pm_complete_cb) (struct xradio_common *hw_priv,
-					struct wsm_set_pm_complete *arg);
 
 /* 3.28 */
 struct wsm_set_bss_params {
@@ -1265,8 +1220,6 @@ struct wsm_switch_channel {
 int wsm_switch_channel(struct xradio_common *hw_priv,
 		       const struct wsm_switch_channel *arg, int if_id);
 
-typedef void (*wsm_channel_switch_cb) (struct xradio_common *hw_priv);
-
 struct wsm_start {
 	/* WSM_START_MODE_... */
 	/* [in] */ u8 mode;
@@ -1323,9 +1276,6 @@ int wsm_start_find(struct xradio_common *hw_priv, int if_id);
 
 int wsm_stop_find(struct xradio_common *hw_priv, int if_id);
 
-typedef void (*wsm_find_complete_cb) (struct xradio_common *hw_priv,
-				      u32 status);
-
 struct wsm_suspend_resume {
 	/* See 3.52 */
 	/* Link ID */
@@ -1340,9 +1290,6 @@ struct wsm_suspend_resume {
 	/* [out] */ int queue;
 	/* [out] */ int if_id;
 };
-
-typedef void (*wsm_suspend_resume_cb) (struct xradio_vif *priv,
-				       struct wsm_suspend_resume *arg);
 
 /* 3.54 Update-IE request. */
 struct wsm_update_ie {
@@ -1367,242 +1314,239 @@ struct wsm_map_link {
 int wsm_map_link(struct xradio_common *hw_priv, const struct wsm_map_link *arg,
 		int if_id);
 
-struct wsm_cbc {
-	wsm_scan_complete_cb scan_complete;
-	wsm_tx_confirm_cb tx_confirm;
-	wsm_rx_cb rx;
-	wsm_event_cb event;
-	wsm_set_pm_complete_cb set_pm_complete;
-	wsm_channel_switch_cb channel_switch;
-	wsm_find_complete_cb find_complete;
-	wsm_suspend_resume_cb suspend_resume;
-};
 #ifdef MCAST_FWDING
 
 /* 3.65	Give Buffer Request */
-int wsm_init_release_buffer_request(struct xradio_common *priv);
+int wsm_init_release_buffer_request(struct xradio_common *priv, u8 index);
 
-/* 3.65 fixed memory leakage*/
-void wsm_deinit_release_buffer(struct xradio_common *hw_priv);
+/* 3.65 fixed memory leakage by yangfh*/
+int wsm_deinit_release_buffer(struct xradio_common *hw_priv);
 
 /* 3.67	Request Buffer Request */
 int wsm_request_buffer_request(struct xradio_vif *priv,
-				u8 *arg);
+                                u8 *arg);
 #endif
 /* ******************************************************************** */
 /* MIB shortcats							*/
 #define XR_RRM 1
-#ifdef XR_RRM /*RadioResourceMeasurement*/
+#ifdef XR_RRM//RadioResourceMeasurement
 /* RadioResourceMeasurement Request*/
 #define MEAS_CCA         0
 #define MEAS_CHANNELLOAD 1
-typedef struct LMAC_MEAS_CHANNEL_LOAD_PARAMS_S {
-	u8    Reserved;
-	u8    ChannelLoadCCA;
-	u16   ChannelNum;
-	u16   RandomInterval;
-	u16   MeasurementDuration;
-	u32   MeasurementStartTimel;
-	u32   MeasurementStartTimeh;
-} LMAC_MEAS_CHANNEL_LOAD_PARAMS;
+typedef struct LMAC_MEAS_CHANNEL_LOAD_PARAMS_S
+{
+    u8    Reserved;
+    u8    ChannelLoadCCA;
+    u16   ChannelNum;
+    u16   RandomInterval;
+    u16   MeasurementDuration;
+    u32   MeasurementStartTimel;
+    u32   MeasurementStartTimeh;
+}LMAC_MEAS_CHANNEL_LOAD_PARAMS;
 
 #define MEAS_RPI 0
 #define MEAS_IPI 1
 
-typedef struct LMAC_MEAS_NOISE_HISTOGRAM_PARAMS_S {
-	u8    Reserved;
-	u8    IpiRpi;
-	u16   ChannelNum;
-	u16   RandomInterval;
-	u16   MeasurementDuration;
-	u32   MeasurementStartTimel;
-	u32   MeasurementStartTimeh;
-} LMAC_MEAS_NOISE_HISTOGRAM_PARAMS;
+typedef struct LMAC_MEAS_NOISE_HISTOGRAM_PARAMS_S
+{
+    u8    Reserved;
+    u8    IpiRpi;
+    u16   ChannelNum;
+    u16   RandomInterval;
+    u16   MeasurementDuration;
+    u32   MeasurementStartTimel;
+    u32   MeasurementStartTimeh;
+}LMAC_MEAS_NOISE_HISTOGRAM_PARAMS;
 
-#define LMAC_MAX_SSIDS       16
+#define LMAC_MAX_SSIDS       16 
 #define LMAC_MAX_SSID_LENGTH 32
-typedef struct LMAC_CHANNELS_S {
-	u32  ChannelNum;
-	u32  MinChannelTime;
-	u32  MaxChannelTime;
-	s32  TxPowerLevel;
-} LMAC_CHANNELS;
+typedef struct LMAC_CHANNELS_S
+{
+    u32  ChannelNum;
+    u32  MinChannelTime;
+    u32  MaxChannelTime;
+    s32  TxPowerLevel;
+}LMAC_CHANNELS;
 
-typedef struct LMAC_SSIDS_S {
-	u32  SSIDLength;
-	u8   SSID[LMAC_MAX_SSID_LENGTH];
-} LMAC_SSIDS;
+typedef struct LMAC_SSIDS_S
+{
+    u32  SSIDLength;
+    u8   SSID[LMAC_MAX_SSID_LENGTH];
+}LMAC_SSIDS;
 
-typedef struct LMAC_MEAS_BEACON_PARAMS_S {
-	/*u8    RegulatoryClass;*/
-	/*u8    MeasurementMode;*/
-	/*u16   ChannelNum;*/
-	u16   RandomInterval;
-	/*u16   MeasurementDuration;*/
-	/*u8    Bssid[6];*/
-	u16   Reserved;
-	/*SCAN_PARAMETERS ScanParameters;*/
-	u8   Band;
-	u8   ScanType;
-	u8   ScanFlags;
-	u8   MaxTransmitRate;
-	u32  AutoScanInterval;
-	u8   NumOfProbeRequests;
-	u8   NumOfChannels;
-	u8   NumOfSSIDs;
-	u8   ProbeDelay;
-	LMAC_CHANNELS Channels;
-	LMAC_SSIDS    Ssids; /*here for SCAN_PARAMETER sizing purposes*/
-} LMAC_MEAS_BEACON_PARAMS;
+typedef struct LMAC_MEAS_BEACON_PARAMS_S
+{
+    //u8    RegulatoryClass;
+    //u8    MeasurementMode;
+    //u16   ChannelNum;
+    u16   RandomInterval;
+    //u16   MeasurementDuration;
+    //u8    Bssid[6];
+    u16   Reserved;
+    //SCAN_PARAMETERS ScanParameters;
+    u8   Band;
+    u8   ScanType;
+    u8   ScanFlags;
+    u8   MaxTransmitRate;
+    u32  AutoScanInterval;
+    u8   NumOfProbeRequests;
+    u8   NumOfChannels;
+    u8   NumOfSSIDs;
+    u8   ProbeDelay;
+    LMAC_CHANNELS Channels;
+    LMAC_SSIDS    Ssids; // here for SCAN_PARAMETER sizing purposes
+}LMAC_MEAS_BEACON_PARAMS;
 
-typedef struct LMAC_MEAS_STA_STATS_PARAMS_S {
-	u8    PeerMacAddress[6];
-	u16   RandomInterval;
-	u16   MeasurementDuration;
-	u8    GroupId;
-	u8    Reserved;
-} LMAC_MEAS_STA_STATS_PARAMS;
+typedef struct LMAC_MEAS_STA_STATS_PARAMS_S
+{
+    u8    PeerMacAddress[6];
+    u16   RandomInterval;
+    u16   MeasurementDuration;
+    u8    GroupId;
+    u8    Reserved;
+}LMAC_MEAS_STA_STATS_PARAMS;
 
-typedef struct LMAC_MEAS_LINK_MEASUREMENT_PARAMS_S {
-	u8    Reserved[4];
-} LMAC_MEAS_LINK_MEASUREMENT_PARAMS;
+typedef struct LMAC_MEAS_LINK_MEASUREMENT_PARAMS_S
+{
+    u8    Reserved[4];
+}LMAC_MEAS_LINK_MEASUREMENT_PARAMS;
 
-typedef union LMAC_MEAS_REQUEST_U {
-	LMAC_MEAS_CHANNEL_LOAD_PARAMS     ChannelLoadParams;
-	LMAC_MEAS_NOISE_HISTOGRAM_PARAMS  NoisHistogramParams;
-	LMAC_MEAS_BEACON_PARAMS           BeaconParams;
-	LMAC_MEAS_STA_STATS_PARAMS        StaStatsParams;
-	LMAC_MEAS_LINK_MEASUREMENT_PARAMS LinkMeasurementParams;
+typedef union LMAC_MEAS_REQUEST_U
+{
+    LMAC_MEAS_CHANNEL_LOAD_PARAMS     ChannelLoadParams;
+    LMAC_MEAS_NOISE_HISTOGRAM_PARAMS  NoisHistogramParams;
+    LMAC_MEAS_BEACON_PARAMS           BeaconParams;
+    LMAC_MEAS_STA_STATS_PARAMS        StaStatsParams;
+   LMAC_MEAS_LINK_MEASUREMENT_PARAMS LinkMeasurementParams;
 } LMAC_MEAS_REQUEST;
 
-/*
- * This struct is a copy of WSM_HI_START_MEASUREMENT_REQ,
- * except that MsgLen and MsgId is not included.
- */
-typedef struct MEASUREMENT_PARAMETERS_S {
-	s32           TxPowerLevel;
-	u8            DurationMandatory;
-	u8            MeasurementType;
-	u8            MeasurementRequestLength;
-	u8            Reserved[5];
-	LMAC_MEAS_REQUEST MeasurementRequest;
-} MEASUREMENT_PARAMETERS;
+// This struct is a copy of WSM_HI_START_MEASUREMENT_REQ, except that MsgLen and MsgId is not included
+typedef struct MEASUREMENT_PARAMETERS_S
+{
+//    u16           MsgLen;
+//    u16           MsgId;
+    s32           TxPowerLevel;
+    u8            DurationMandatory;
+    u8            MeasurementType;
+    u8            MeasurementRequestLength;
+    u8            Reserved[5];
+    LMAC_MEAS_REQUEST MeasurementRequest;
+}MEASUREMENT_PARAMETERS;
 
 /* RadioResourceMeasurement Result*/
- typedef struct LMAC_MEAS_CHANNEL_LOAD_RESULTS_S {
-	u8   Reserved;
-	u8   ChannelLoadCCA;
-	u16  ChannelNum;
-	u32  ActualMeasurementStartTimel;
-	u32  ActualMeasurementStartTimeh;
-	u16  MeasurementDuration;
-	u8   CCAbusyFraction;
-	u8   ChannelLoad;
-} LMAC_MEAS_CHANNEL_LOAD_RESULTS;
+ typedef struct LMAC_MEAS_CHANNEL_LOAD_RESULTS_S
+{
+    u8   Reserved;
+    u8   ChannelLoadCCA;
+    u16  ChannelNum;
+    u32  ActualMeasurementStartTimel;
+    u32  ActualMeasurementStartTimeh;
+    u16  MeasurementDuration;
+    u8   CCAbusyFraction;
+    u8   ChannelLoad;
+}LMAC_MEAS_CHANNEL_LOAD_RESULTS;
 
-typedef struct LMAC_MEAS_NOISE_HISTOGRAM_RESULTS_S {
-	u16  Reserved;
-	u16  ChannelNum;
-	u32  ActualMeasurementStartTimel;
-	u32  ActualMeasurementStartTimeh;
-	u16  MeasurementDuration;
-	u8   AntennaID;
-	u8   IpiRpi;
-	u8   PI_0_Density;
-	u8   PI_1_Density;
-	u8   PI_2_Density;
-	u8   PI_3_Density;
-	u8   PI_4_Density;
-	u8   PI_5_Density;
-	u8   PI_6_Density;
-	u8   PI_7_Density;
-	u8   PI_8_Density;
-	u8   PI_9_Density;
-	u8   PI_10_Density;
-	u8   Reserved2;
-} LMAC_MEAS_NOISE_HISTOGRAM_RESULTS;
+typedef struct LMAC_MEAS_NOISE_HISTOGRAM_RESULTS_S
+{
+    u16  Reserved;
+    u16  ChannelNum;
+    u32  ActualMeasurementStartTimel;
+    u32  ActualMeasurementStartTimeh;
+    u16  MeasurementDuration;
+    u8   AntennaID;
+    u8   IpiRpi;
+    u8   PI_0_Density;
+    u8   PI_1_Density;
+    u8   PI_2_Density;
+    u8   PI_3_Density;
+    u8   PI_4_Density;
+    u8   PI_5_Density;
+    u8   PI_6_Density;
+    u8   PI_7_Density;
+    u8   PI_8_Density;
+    u8   PI_9_Density;
+    u8   PI_10_Density;
+    u8   Reserved2;
+}LMAC_MEAS_NOISE_HISTOGRAM_RESULTS;
 
-typedef struct LMAC_MEAS_BEACON_RESULTS_S {
-	u16  MeasurementDuration;
-	u16  Reserved;
-	u32  StartTsfl;
-	u32  StartTsfh;
-	u32  Durationl;
-	u32  Durationh;
-	/*SCAN_PARAMETERS ScanParameters;*/
-	u8   Band;
-	u8   ScanType;
-	u8   ScanFlags;
-	u8   MaxTransmitRate;
-	u32  AutoScanInterval;
-	u8   NumOfProbeRequests;
-	u8   NumOfChannels;
-	u8   NumOfSSIDs;
-	u8   ProbeDelay;
-	LMAC_CHANNELS Channels;
-	LMAC_SSIDS    Ssids;
-} LMAC_MEAS_BEACON_RESULTS;
+typedef struct LMAC_MEAS_BEACON_RESULTS_S
+{
+    u16  MeasurementDuration;
+    u16  Reserved;
+    u32  StartTsfl;
+    u32  StartTsfh;
+    u32  Durationl;
+    u32  Durationh;
+    //SCAN_PARAMETERS ScanParameters;
+    u8   Band;
+    u8   ScanType;
+    u8   ScanFlags;
+    u8   MaxTransmitRate;
+    u32  AutoScanInterval;
+    u8   NumOfProbeRequests;
+    u8   NumOfChannels;
+    u8   NumOfSSIDs;
+    u8   ProbeDelay;
+    LMAC_CHANNELS Channels;
+    LMAC_SSIDS    Ssids;
+}LMAC_MEAS_BEACON_RESULTS;
 
-typedef struct LMAC_MEAS_STA_STATS_RESULTS_S {
-	u16  MeasurementDuration;
-	u8   GroupId;
-	u8   StatisticsGroupDataLength;
-	u8   StatisticsGroupData[52];
-} LMAC_MEAS_STA_STATS_RESULTS;
+typedef struct LMAC_MEAS_STA_STATS_RESULTS_S
+{
+    u16  MeasurementDuration;
+    u8   GroupId;
+    u8   StatisticsGroupDataLength;
+    u8   StatisticsGroupData[52];
+}LMAC_MEAS_STA_STATS_RESULTS;
 
-typedef struct LMAC_MEAS_LINK_MEASUREMENT_RESULTS_S {
-	s16  TransmitPower;
-	u8   RxAntennaID;
-	u8   TxAntennaID;
-	s32  NoiseLeveldBm;
-	s8   LatestRssi;
-	u8   Reserved1;
-	u8   Reserved2;
-	u8   Reserved3;
-} LMAC_MEAS_LINK_MEASUREMENT_RESULTS;
+typedef struct LMAC_MEAS_LINK_MEASUREMENT_RESULTS_S
+{
+    s16  TransmitPower;
+    u8   RxAntennaID;
+    u8   TxAntennaID;
+    s32  NoiseLeveldBm;
+    s8   LatestRssi;
+    u8   Reserved1;
+    u8   Reserved2;
+    u8   Reserved3;
+}LMAC_MEAS_LINK_MEASUREMENT_RESULTS;
 
-typedef union LMAC_MEAS_REPORT_U {
-	LMAC_MEAS_CHANNEL_LOAD_RESULTS     ChannelLoadResults;
-	LMAC_MEAS_NOISE_HISTOGRAM_RESULTS  NoiseHistogramResults;
-	LMAC_MEAS_BEACON_RESULTS           BeaconResults;
-	LMAC_MEAS_STA_STATS_RESULTS        StaStatsResults;
-	LMAC_MEAS_LINK_MEASUREMENT_RESULTS LinkMeasurementResults;
-} LMAC_MEAS_REPORT;
-/*
- * Note: eMeasurementTypes MUST match the
- * #define WSM_MEASURE_TYPE_XXX from wsm_api.h.
- */
+typedef union LMAC_MEAS_REPORT_U
+{
+    LMAC_MEAS_CHANNEL_LOAD_RESULTS     ChannelLoadResults;
+    LMAC_MEAS_NOISE_HISTOGRAM_RESULTS  NoiseHistogramResults;
+    LMAC_MEAS_BEACON_RESULTS           BeaconResults;
+    LMAC_MEAS_STA_STATS_RESULTS        StaStatsResults;
+    LMAC_MEAS_LINK_MEASUREMENT_RESULTS LinkMeasurementResults;
+}LMAC_MEAS_REPORT;
+
+// Note: eMeasurementTypes MUST match the #define WSM_MEASURE_TYPE_XXX from wsm_api.h
 typedef enum {
-	ChannelLoadMeasurement = 0,
-	NoiseHistrogramMeasurement,
-	BeaconReport,
-	STAstatisticsReport,
-	LinkMeasurement
-} eMeasurementTypes;
+    ChannelLoadMeasurement=0,
+    NoiseHistrogramMeasurement,
+    BeaconReport,
+    STAstatisticsReport,
+    LinkMeasurement
+}eMeasurementTypes;
 
-typedef struct MEASUREMENT_COMPLETE_S {
-	/*u16          RandomInterval;*/
-	/*u16          Reserved0;*/
-	/* From here WSM_HI_MEASURE_CMPL_IND and
-	 * MEASUREMENT_COMPLETE_S must be identical.
-	 */
-	u8           Dot11PowerMgmtMode;
-	u8           MeasurementType;
-
-	/* Set to 1 if more indications are to follow
-	 * for this measurement, otherwise 0; */
-	u16          MoreInd;
-	u32          Status;
-	u8           MeasurementReportLength;
-	u8           Reserved2[3];
-	LMAC_MEAS_REPORT MeasurementReport;
-} MEASUREMENT_COMPLETE; /*Note: must be 32 bit aligned*/
+typedef struct MEASUREMENT_COMPLETE_S
+{
+//    u16          RandomInterval;      
+//    u16          Reserved0;          
+    u8           Dot11PowerMgmtMode;  // From here WSM_HI_MEASURE_CMPL_IND and MEASUREMENT_COMPLETE_S must be identical
+    u8           MeasurementType;
+    u16          MoreInd;   // Set to 1 if more indications are to follow for this measurement, otherwise 0;
+    u32          Status;
+    u8           MeasurementReportLength;
+    u8           Reserved2[3];
+    LMAC_MEAS_REPORT MeasurementReport;
+}MEASUREMENT_COMPLETE; // Note: must be 32 bit aligned
 
 #endif
 int wsm_11k_measure_requset(struct xradio_common  *hw_priv,
-					       u8  measure_type,
-					      u16  ChannelNum,
-					      u16  Duration);
+                                               u8  measure_type,
+                                              u16  ChannelNum,
+                                              u16  Duration);
 
 
 static inline int wsm_set_fw_debug_control(struct xradio_common *hw_priv,
@@ -1703,34 +1647,34 @@ struct wsm_ampducounters_table {
 };
 
 struct wsm_txpipe_counter {
-	u32 count1;
-	u32 count2;
-	u32 count3;
-	u32 count4;
-	u32 count5;
-	u32 count6;
-	u32 count7;
-	u32 count8;
-	u32 count9;
-	u32 counta;
+    u32 count1;
+    u32 count2;
+    u32 count3;
+    u32 count4;
+    u32 count5;
+    u32 count6;
+    u32 count7;
+    u32 count8;
+    u32 count9;
+    u32 counta;
 };
 
 struct wsm_backoff_counter {
-	u32 count0;
-	u32 count1;
-	u32 count2;
-	u32 count3;
-	u32 count4;
-	u32 count5;
-	u32 count6;
-	u32 count7;
-	u32 count8;
-	u32 count9;
+    u32 count0;
+    u32 count1;
+    u32 count2;
+    u32 count3;
+    u32 count4;
+    u32 count5;
+    u32 count6;
+    u32 count7;
+    u32 count8;
+    u32 count9;
 };
-/*for read/write fw registers*/
-#define WSM_REG_RW_F   BIT(0)   /*0:read, 1:write*/
-#define WSM_REG_RET_F   BIT(1)  /*results is valid.*/
-#define WSM_REG_BK_F   BIT(4)   /*operate in block mode.*/
+//add by yangfh for read/write fw registers
+#define WSM_REG_RW_F   BIT(0)  //0:read, 1:write
+#define WSM_REG_RET_F   BIT(1)  //results is valid.
+#define WSM_REG_BK_F   BIT(4)  //operate in block mode.
 
 struct reg_data {
 	u32 reg_addr;
@@ -1750,13 +1694,13 @@ typedef struct tag_wsm_reg_r {
 } WSM_REG_R;
 
 struct wsm_backoff_ctrl {
-	u32 enable;
-	u32 min;
-	u32 max;
+    u32 enable;
+    u32 min;
+    u32 max;
 };
 struct wsm_tala_para {
-	u32 para;
-	u32 thresh;
+    u32 para;
+    u32 thresh;
 };
 static inline int wsm_get_counters_table(struct xradio_common *hw_priv,
 					 struct wsm_counters_table *arg)
@@ -1863,10 +1807,8 @@ static inline int wsm_set_beacon_filter_table(struct xradio_common *hw_priv,
 			if_id);
 }
 
-/* Enable/disable beacon filtering */
-#define WSM_BEACON_FILTER_ENABLE	BIT(0)
-/* If 1 FW will handle ERP IE changes internally */
-#define WSM_BEACON_FILTER_AUTO_ERP	BIT(1)
+#define WSM_BEACON_FILTER_ENABLE	BIT(0) /* Enable/disable beacon filtering */
+#define WSM_BEACON_FILTER_AUTO_ERP	BIT(1) /* If 1 FW will handle ERP IE changes internally */
 
 struct wsm_beacon_filter_control {
 	int enabled;
@@ -1899,21 +1841,17 @@ struct wsm_operational_mode {
 	int performAntDiversity;
 };
 
-#ifdef CONFIG_XRADIO_DEBUGFS
-extern u8 low_pwr_disable;
-#endif
+static const struct wsm_operational_mode defaultoperationalmode = {
+	.power_mode = wsm_power_mode_quiescent,
+	.disableMoreFlagUsage = true,
+};
 
 static inline int wsm_set_operational_mode(struct xradio_common *hw_priv,
 					const struct wsm_operational_mode *arg,
 					int if_id)
 {
 	u32 val = arg->power_mode;
-
-#ifdef CONFIG_XRADIO_DEBUGFS
-	if (low_pwr_disable) /*disable low_power mode.*/
-		val = wsm_power_mode_active;
-#endif
-
+	
 	if (arg->disableMoreFlagUsage)
 		val |= BIT(4);
 	if (arg->performAntDiversity)
@@ -2140,7 +2078,7 @@ struct wsm_group_tx_seq {
 
 /* 4.39 SetHtProtection - WO */
 #define WSM_DUAL_CTS_PROT_ENB		(1 << 0)
-#define WSM_NON_GREENFIELD_STA		(1 << 1)
+#define WSM_NON_GREENFIELD_STA		PRESENT(1 << 1)
 #define WSM_HT_PROT_MODE__NO_PROT	(0 << 2)
 #define WSM_HT_PROT_MODE__NON_MEMBER	(1 << 2)
 #define WSM_HT_PROT_MODE__20_MHZ	(2 << 2)
@@ -2247,28 +2185,6 @@ struct wsm_arp_ipv4_filter {
 	__be32 ipv4Address[WSM_MAX_ARP_IP_ADDRTABLE_ENTRIES];
 } __packed;
 
-#ifdef IPV6_FILTERING
-/* NDP IPv6 filtering */
-struct wsm_ndp_ipv6_filter {
-	__le32 enable;
-	struct in6_addr ipv6Address[WSM_MAX_NDP_IP_ADDRTABLE_ENTRIES];
-} __packed;
-/* IPV6 Addr Filter Info */
-struct wsm_ip6_addr_info {
-	u8 filter_mode;
-	u8 address_mode;
-	u8 Reserved[2];
-	u8 ipv6[16];
-};
-
-/* IPV6 Addr Filter */
-struct wsm_ipv6_filter {
-	u8 numfilter;
-	u8 action_mode;
-	u8 Reserved[2];
-	struct wsm_ip6_addr_info ipv6filter[0];
-} __packed;
-#endif /*IPV6_FILTERING*/
 
 static inline int wsm_set_arp_ipv4_filter(struct xradio_common *hw_priv,
 					  struct wsm_arp_ipv4_filter *fp,
@@ -2277,16 +2193,6 @@ static inline int wsm_set_arp_ipv4_filter(struct xradio_common *hw_priv,
 	return wsm_write_mib(hw_priv, WSM_MIB_ID_ARP_IP_ADDRESSES_TABLE,
 			    fp, sizeof(*fp), if_id);
 }
-
-#ifdef IPV6_FILTERING
-static inline int wsm_set_ndp_ipv6_filter(struct xradio_common *priv,
-					  struct wsm_ndp_ipv6_filter *fp,
-					  int if_id)
-{
-	return wsm_write_mib(priv, WSM_MIB_ID_NS_IP_ADDRESSES_TABLE,
-			    fp, sizeof(*fp), if_id);
-}
-#endif /*IPV6_FILTERING*/
 
 /* P2P Power Save Mode Info - 4.31 */
 struct wsm_p2p_ps_modeinfo {
@@ -2367,10 +2273,10 @@ struct wsm_forwarding_offload {
 } __packed;
 
 static inline int wsm_set_forwarding_offlad(struct xradio_common *hw_priv,
-				     struct wsm_forwarding_offload *arg, int if_id)
+				     struct wsm_forwarding_offload *arg,int if_id)
 {
 	return wsm_write_mib(hw_priv, WSM_MIB_ID_FORWARDING_OFFLOAD,
-				arg, sizeof(*arg), if_id);
+				arg, sizeof(*arg),if_id);
 }
 
 #endif
@@ -2387,13 +2293,11 @@ void wsm_unlock_tx(struct xradio_common *hw_priv);
 /* ******************************************************************** */
 /* WSM / BH API								*/
 
-int wsm_handle_exception(struct xradio_common *hw_priv, u8 *data, size_t len);
+int wsm_handle_exception(struct xradio_common *hw_priv, u8 * data, size_t len);
 int wsm_handle_rx(struct xradio_common *hw_priv, int id, struct wsm_hdr *wsm,
 		  struct sk_buff **skb_p);
-void wsm_send_deauth_to_self(struct xradio_common *hw_priv,
-							 struct xradio_vif *priv);
-void wsm_send_disassoc_to_self(struct xradio_common *hw_priv,
-							   struct xradio_vif *priv);
+void wms_send_deauth_to_self(struct xradio_common *hw_priv, struct xradio_vif *priv);
+void wms_send_disassoc_to_self(struct xradio_common *hw_priv, struct xradio_vif *priv);
 
 /* ******************************************************************** */
 /* wsm_buf API								*/
@@ -2404,7 +2308,7 @@ struct wsm_buf {
 	u8 *end;
 };
 
-void wsm_buf_init(struct wsm_buf *buf, int size);
+void wsm_buf_init(struct wsm_buf *buf);
 void wsm_buf_deinit(struct wsm_buf *buf);
 
 /* ******************************************************************** */
