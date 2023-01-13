@@ -2913,9 +2913,9 @@
 			cap-sd-highspeed;
 			cap-mmc-highspeed;
 			cap-wait-while-busy;
-			filter_speed = <0x700000>;
-			filter_sector = <0x08>;
-			perf_enable = <0x01>;
+			/* filter_speed = <0x700000>; */
+			/* filter_sector = <0x08>; */
+			/* perf_enable = <0x01>; */
 			status = "okay";
 			sdc_detmode = <0x05>;
 			pinctrl-0 = <0xf9 0xfa>;
