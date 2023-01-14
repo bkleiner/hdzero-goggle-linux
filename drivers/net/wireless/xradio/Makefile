@@ -26,7 +26,8 @@ xradio_wlan-objs := \
 	sdio.o \
 	pm.o \
 	ht.o \
-	p2p.o
+	p2p.o \
+	platform.o
 
 # ccflags-y += -DMCAST_FWDING
 # ccflags-y += -DXRADIO_SUSPEND_RESUME_FILTER_ENABLE

@@ -21,13 +21,13 @@
 #include "xradio.h"
 #include "sdio.h"
 #include "main.h"
+#include "platform.h"
 
 /* sdio vendor id and device id*/
 #define SDIO_VENDOR_ID_XRADIO 0x0020
 #define SDIO_DEVICE_ID_XRADIO 0x2281
 static const struct sdio_device_id xradio_sdio_ids[] = {
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_XRADIO, SDIO_DEVICE_ID_XRADIO) },
-	//{ SDIO_DEVICE(SDIO_ANY_ID, SDIO_ANY_ID) },
 	{ /* end: all zeroes */			},
 };
 
@@ -72,6 +72,14 @@ int sdio_set_blk_size(struct xradio_common *self, size_t size)
 
 extern void xradio_irq_handler(struct xradio_common*);
 
+#ifndef CONFIG_XRADIO_USE_GPIO_IRQ
+static void sdio_irq_handler(struct sdio_func *func)
+{
+	struct xradio_common *self = sdio_get_drvdata(func);
+	if (self != NULL)
+		xradio_irq_handler(self);
+}
+#else
 static irqreturn_t sdio_irq_handler(int irq, void *dev_id)
 {
 	struct sdio_func *func = (struct sdio_func*) dev_id;
@@ -104,6 +112,7 @@ static int sdio_enableint(struct sdio_func* func)
 
 	return ret;
 }
+#endif
 
 int sdio_pm(struct xradio_common *self, bool  suspend)
 {
@@ -118,44 +127,12 @@ int sdio_pm(struct xradio_common *self, bool  suspend)
 	return ret;
 }
 
-static const struct of_device_id xradio_sdio_of_match_table[] = {
-	{ .compatible = "xradio,xr819" },
-	{ }
-};
-
-static int xradio_probe_of(struct sdio_func *func)
-{
-	struct device *dev = &func->dev;
-	struct device_node *np = dev->of_node;
-	const struct of_device_id *of_id;
-	int irq;
-	int ret;
-
-	of_id = of_match_node(xradio_sdio_of_match_table, np);
-	if (!of_id)
-		return -ENODEV;
-
-	//pdev_data->family = of_id->data;
-
-	irq = irq_of_parse_and_map(np, 0);
-	if (!irq) {
-		xr_printk(XRADIO_DBG_ERROR, "SDIO: No irq in platform data\n");
-		return -EINVAL;
-	}
-
-	ret = devm_request_irq(dev, irq, sdio_irq_handler, 0, "xradio", func);
-	if (ret) {
-		xr_printk(XRADIO_DBG_ERROR, "SDIO: Failed to request irq_wakeup.\n");
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 /* Probe Function to be called by SDIO stack when device is discovered */
 static int sdio_probe(struct sdio_func *func,
                       const struct sdio_device_id *id)
 {
+	int ret = 0;
+
 	xr_printk(XRADIO_DBG_ALWY, "XR819 device discovered\n");
 	xr_printk(XRADIO_DBG_MSG, "SDIO: clock  = %d\n", func->card->host->ios.clock);
 	xr_printk(XRADIO_DBG_MSG, "SDIO: class  = %x\n", func->class);
@@ -163,28 +140,22 @@ static int sdio_probe(struct sdio_func *func,
 	xr_printk(XRADIO_DBG_MSG, "SDIO: device = 0x%04x\n", func->device);
 	xr_printk(XRADIO_DBG_MSG, "SDIO: fctn#  = 0x%04x\n", func->num);
 
-#if 0  //for odly and sdly debug.
-{
-	u32 sdio_param = 0;
-	sdio_param = readl(__io_address(0x01c20088));
-	sdio_param &= ~(0xf<<8);
-	sdio_param |= 3<<8;
-	sdio_param &= ~(0xf<<20);
-	sdio_param |= s_dly<<20;
-	writel(sdio_param, __io_address(0x01c20088));
-	xr_printk(XRADIO_DBG_ALWY, "%s: 0x01c20088=0x%08x\n", __func__, sdio_param);
-}
-#endif
-
-	xradio_probe_of(func);
 
 	func->card->quirks |= MMC_QUIRK_BROKEN_BYTE_MODE_512;
 	sdio_claim_host(func);
 	sdio_enable_func(func);
-	sdio_release_host(func);
-
+#ifndef CONFIG_XRADIO_USE_GPIO_IRQ
+	ret = sdio_claim_irq(func, sdio_irq_handler);
+	if (ret) {
+		xr_printk(XRADIO_DBG_ERROR, "%s:sdio_claim_irq failed(%d).\n", __func__, ret);
+		sdio_release_host(func);
+		return ret;
+	}
+#else
+	xradio_request_gpio_irq(func, sdio_irq_handler);
 	sdio_enableint(func);
-
+#endif
+	sdio_release_host(func);
 	xradio_core_init(func);
 
 	return 0;
@@ -194,6 +165,13 @@ static int sdio_probe(struct sdio_func *func,
 static void sdio_remove(struct sdio_func *func)
 {
 	struct mmc_card *card = func->card;
+#ifndef CONFIG_XRADIO_USE_GPIO_IRQ
+	sdio_claim_host(func);
+	sdio_release_irq(func);
+	sdio_release_host(func);
+#else
+	xradio_free_gpio_irq(func);
+#endif
 	xradio_core_deinit(func);
 	sdio_claim_host(func);
 	sdio_disable_func(func);
@@ -234,13 +212,28 @@ static struct sdio_driver sdio_driver = {
 	}
 };
 
+int xradio_sdio_register() {
+	int ret = 0;
 
-int xradio_sdio_register(){
-	return sdio_register_driver(&sdio_driver);
+	xr_printk(XRADIO_DBG_MSG, "%s\n", __func__);
+	
+	xradio_wlan_power(1);
+	ret = sdio_register_driver(&sdio_driver);
+	if (ret) {
+		xr_printk(XRADIO_DBG_ERROR, "sdio_register_driver failed!\n");
+		return ret;
+	}
+	xradio_sdio_detect(1);
+
+	return ret;
 }
 
 void xradio_sdio_unregister(){
+	xr_printk(XRADIO_DBG_MSG, "%s\n", __func__);
+
+	xradio_wlan_power(0);
 	sdio_unregister_driver(&sdio_driver);
+	xradio_sdio_detect(0);
 }
 
 MODULE_DEVICE_TABLE(sdio, xradio_sdio_ids);
