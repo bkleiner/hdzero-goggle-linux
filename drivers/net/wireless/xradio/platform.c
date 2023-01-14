@@ -21,15 +21,19 @@
 #include <linux/gpio.h>
 #include <linux/types.h>
 #include <linux/power/aw_pm.h>
+#include <mach/sunxi-chip.h>
 
 #include "xradio.h"
 #include "platform.h"
 #include "sdio.h"
 
+#define CHIP_SIZE	16
+
 extern void sunxi_wlan_set_power(bool on);
 extern int sunxi_wlan_get_bus_index(void);
 extern int sunxi_wlan_get_oob_irq(void);
 extern int sunxi_wlan_get_oob_irq_flags(void);
+extern void sunxi_wlan_chipid_mac_address(u8 *mac);
 
 int xradio_wlan_power(int on)
 {
@@ -77,4 +81,16 @@ void xradio_free_gpio_irq(struct sdio_func *func)
 
 	disable_irq(irq);
 	devm_free_irq(dev, irq, func);
+}
+
+void xradio_get_mac(u8 *mac) {
+	u8 serial[CHIP_SIZE];
+	sunxi_get_serial((u8 *)serial);
+
+	mac[0] = 0xDC;
+	mac[1] = 0x44;
+	mac[2] = 0x6D;
+	mac[3] = serial[0];
+	mac[4] = serial[1];
+	mac[5] = serial[2];
 }
