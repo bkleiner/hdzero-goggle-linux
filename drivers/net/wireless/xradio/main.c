@@ -25,6 +25,7 @@
 #include "scan.h"
 #include "pm.h"
 #include "sdio.h"
+#include "platform.h"
 
 /* TODO: use rates and channels from the device */
 #define RATETAB_ENT(_rate, _rateid, _flags)		\
@@ -504,11 +505,7 @@ int xradio_core_init(struct sdio_func* func)
 	u8 b;		/* MRK 5.5a */
 	struct ieee80211_hw *dev;
 	struct xradio_common *hw_priv;
-	unsigned char randomaddr[ETH_ALEN];
-	const unsigned char *addr = NULL;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 13, 0))
-	u8 addr_buf[ETH_ALEN];
-#endif
+	u8 addr[ETH_ALEN];
 
 	//init xradio_common
 	dev = xradio_init_common(sizeof(struct xradio_common));
@@ -522,19 +519,7 @@ int xradio_core_init(struct sdio_func* func)
 	sdio_set_drvdata(func, hw_priv);
 
 	// fill in mac addresses
-	if (hw_priv->pdev->of_node) {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 13, 0))
-		of_get_mac_address(hw_priv->pdev->of_node, addr_buf);
-		addr = addr_buf;
-#else
-		addr = of_get_mac_address(hw_priv->pdev->of_node);
-#endif
-	}
-	if (!addr) {
-		dev_warn(hw_priv->pdev, "no mac address provided, using random\n");
-		eth_random_addr(randomaddr);
-		addr = randomaddr;
-	}
+	xradio_get_mac(addr);
 	for (b = 0; b < XRWL_MAX_VIFS; b++) {				/* MRK 5.5a */
 		memcpy(hw_priv->addresses[b].addr, addr, ETH_ALEN);
 		hw_priv->addresses[b].addr[5] += b;

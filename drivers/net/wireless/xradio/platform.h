@@ -50,4 +50,6 @@ int  xradio_wlan_power(int on);
 int xradio_request_gpio_irq(struct sdio_func *func, irq_handler_t handler);
 void xradio_free_gpio_irq(struct sdio_func *func);
 
+void xradio_get_mac(u8 *mac);
+
 #endif /* XRADIO_PLAT_H_INCLUDED */
