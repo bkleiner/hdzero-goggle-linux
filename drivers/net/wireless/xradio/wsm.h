@@ -1842,7 +1842,7 @@ struct wsm_operational_mode {
 };
 
 static const struct wsm_operational_mode defaultoperationalmode = {
-	.power_mode = wsm_power_mode_quiescent,
+	.power_mode = wsm_power_mode_active,
 	.disableMoreFlagUsage = true,
 };
 
