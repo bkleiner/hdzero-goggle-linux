@@ -124,3 +124,5 @@ all.config
 drivers/gator/gator_src_md5.h
 arch/arm/boot/dts/board.dts
 arch/arm64/boot/dts/sunxi/board.dts
+
+/.toolchain
